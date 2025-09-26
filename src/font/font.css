@@ -1,0 +1,37 @@
+@font-face {
+    font-family: pangmenzhengdao;
+    src: url(./庞门正道标题体2.0增强版.ttf);
+}
+
+@font-face {
+    font-family: din;
+    src: url(./DIN\ Alternate\ Bold.ttf);
+}
+
+@font-face {
+    font-family: abeezee;
+    src: url(./abeezeeitalic-wg69.ttf);
+}
+
+@font-face {
+    font-family: youshebiaotihei;
+    src: url(./优设标题黑.ttf);
+}
+
+@font-face {
+    font-family: digitalnumber;
+    src: url(./sa-digital-number.ttf);
+}
+/* 图表样式 */
+@keyframes trailing2 {
+  0% {
+    left: 0%;
+    top: 0%;
+    transform: translate(0, 0) !important;
+  }
+  100% {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) !important;
+  }
+}
