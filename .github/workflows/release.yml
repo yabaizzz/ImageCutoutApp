@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*" # 当你推送 tag 时触发，比如 v1.0.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build and Publish to GitHub Releases
+        run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Sync to Gitee
+        run: |
+          git clone https://oauth2:${{ secrets.GITEE_TOKEN }}@gitee.com/yabaiz/image-cutout-updates.git gitee_repo
+          cd gitee_repo
+          git pull
+          rsync -av ../dist/ ./  # 把打包产物同步过来
+          git add .
+          git commit -m "Sync from GitHub Release"
+          git push origin master
