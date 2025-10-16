@@ -202,7 +202,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import { mockData, colorMap } from "/public/mock";
+import { mockData, colorMap } from "/public/mock2";
 
 // 响应式数据
 const imageFile = ref(null);
@@ -277,8 +277,6 @@ const handleImageUpload = (event) => {
     return;
   }
   imageFile.value = file;
-  imageInfo.value.name = file.name;
-  imageInfo.value.size = formatFileSize(file.size);
   errorMessage.value = "";
 };
 
@@ -336,6 +334,8 @@ const processFiles = async () => {
     statistics.value = backendData.statistics;
     imageInfo.value.width = backendData.imageInfo.width;
     imageInfo.value.height = backendData.imageInfo.height;
+    imageInfo.value.name = backendData.imageInfo.name;
+    imageInfo.value.size = backendData.imageInfo.size;
 
     // 加载图片
     await loadImage();
@@ -406,10 +406,23 @@ const renderMask = () => {
         const color = getCategoryColor(mask.classId);
         if (mask.type === "polygon") {
           drawPolygonMask(ctx, mask.points, color);
-          drawBoundingBox(ctx, mask.boundingBox, color, mask.classId);
-        } else if (mask.type === "bbox") {
-          drawBoundingBoxMask(ctx, mask.bbox, color);
-          drawBoundingBox(ctx, mask.boundingBox, color, mask.classId);
+          drawBoundingBox(
+            ctx,
+            mask.boundingBox,
+            color,
+            mask.classId,
+            mask.type
+          );
+        } else if (mask.type === "boundingBox") {
+          // 关键修改：用 mask.boundingBox 替代 mask.bbox
+          drawBoundingBoxMask(ctx, mask.boundingBox, color);
+          drawBoundingBox(
+            ctx,
+            mask.boundingBox,
+            color,
+            mask.classId,
+            mask.type
+          );
         }
       });
       maskCanvas.value.style.opacity = maskOpacity.value;
@@ -462,18 +475,25 @@ const drawBoundingBoxMask = (ctx, bbox, color) => {
 };
 
 // 绘制边界框
-const drawBoundingBox = (ctx, bbox, color, classId) => {
+const drawBoundingBox = (ctx, bbox, color, classId, maskType) => {
   ctx.strokeStyle = color;
   ctx.lineWidth = 3;
   ctx.globalAlpha = 1.0;
 
+  // 计算像素级边界框坐标（原有逻辑不变）
   const x = bbox.x * canvasWidth.value;
   const y = bbox.y * canvasHeight.value;
   const width = bbox.width * canvasWidth.value;
   const height = bbox.height * canvasHeight.value;
 
+  // 绘制边界框线条（两种类型都保留）
   ctx.strokeRect(x, y, width, height);
-  drawClassIdLabel(ctx, x, y, width, height, classId, color);
+
+  // 仅 polygon 类型显示 ID 标签，boundingBox 类型不显示
+  if (maskType === "polygon") {
+    drawClassIdLabel(ctx, x, y, width, height, classId, color);
+  }
+
   ctx.globalAlpha = maskOpacity.value;
 };
 
@@ -499,40 +519,6 @@ const drawClassIdLabel = (ctx, x, y, width, height, classId, color) => {
   ctx.fillText(label, x + padding, y + padding);
 };
 
-// 计算多边形面积
-const calculatePolygonArea = (points) => {
-  if (!points || points.length < 3) return 0;
-
-  let area = 0;
-  const n = points.length;
-
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    area += points[i].x * points[j].y;
-    area -= points[j].x * points[i].y;
-  }
-
-  area = Math.abs(area) / 2;
-  return area * canvasWidth.value * canvasHeight.value;
-};
-
-// 计算多边形周长
-const calculatePolygonPerimeter = (points) => {
-  if (!points || points.length < 2) return 0;
-
-  let perimeter = 0;
-  const n = points.length;
-
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    const dx = (points[j].x - points[i].x) * canvasWidth.value;
-    const dy = (points[j].y - points[i].y) * canvasHeight.value;
-    perimeter += Math.sqrt(dx * dx + dy * dy);
-  }
-
-  return perimeter;
-};
-
 // 更新扫描线
 const updateScanLine = () => {
   updateScanMask();
@@ -549,20 +535,23 @@ const updateScanMask = () => {
 
       ctx.save();
       ctx.beginPath();
+      // 扫描线右侧区域（已扫描部分）
       ctx.rect(scanX, 0, canvasWidth.value - scanX, canvasHeight.value);
       ctx.clip();
 
       maskData.value.forEach((mask) => {
         const color = getCategoryColor(mask.classId);
         if (mask.type === "polygon") {
+          // 原有：处理多边形扫描
           drawPolygonScanMask(ctx, mask.points, color);
-        } else if (mask.type === "bbox") {
-          drawBoundingBoxScanMask(ctx, mask.bbox, color);
+        } else if (mask.type === "boundingBox") {
+          // 新增：处理边界框扫描
+          drawBoundingBoxScanMask(ctx, mask.boundingBox, color);
         }
       });
 
       ctx.restore();
-      maskCanvas.value.style.opacity = 0;
+      maskCanvas.value.style.opacity = 0; // 隐藏基础掩码，只显示扫描区域
     }
   } catch (error) {
     console.error("更新扫描遮罩失败:", error);

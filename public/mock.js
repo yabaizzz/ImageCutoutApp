@@ -1,12 +1,39 @@
 export const mockData = {
   code: 200,
   message: "处理成功",
+  type: "polygon",
   imageInfo: {
     name: "卫星遥感图像.png",
     width: 1200,
     height: 800,
     size: "2.4 MB",
   },
+  statistics: [
+    {
+      classId: 0,
+      count: 13,
+      area: 216815,
+      perimeter: 6806,
+    },
+    {
+      classId: 1,
+      count: 5,
+      area: 498944,
+      perimeter: 6902,
+    },
+    {
+      classId: 2,
+      count: 7,
+      area: 887553,
+      perimeter: 8236,
+    },
+    {
+      classId: 3,
+      count: 1,
+      area: 5783699,
+      perimeter: 12581,
+    },
+  ],
   maskData: [
     {
       classId: 0,
@@ -40135,32 +40162,6 @@ export const mockData = {
         width: 0.999592,
         height: 0.999592,
       },
-    },
-  ],
-  statistics: [
-    {
-      classId: 0,
-      count: 13,
-      area: 216815,
-      perimeter: 6806,
-    },
-    {
-      classId: 1,
-      count: 5,
-      area: 498944,
-      perimeter: 6902,
-    },
-    {
-      classId: 2,
-      count: 7,
-      area: 887553,
-      perimeter: 8236,
-    },
-    {
-      classId: 3,
-      count: 1,
-      area: 5783699,
-      perimeter: 12581,
     },
   ],
 };
