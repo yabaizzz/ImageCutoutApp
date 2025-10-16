@@ -51,8 +51,9 @@
       <imageCutouDraggablet2 v-if="knowIndex == 1"></imageCutouDraggablet2>
       <imageProcessing v-if="knowIndex == '2-1'"></imageProcessing>
       <imageProcessList v-if="knowIndex == '2-2'"></imageProcessList>
-      <imageCaptioning2 v-if="knowIndex == '3'"></imageCaptioning2>
       <!-- <imageCaptioning v-if="knowIndex == '3'"></imageCaptioning> -->
+      <imageCaptioning2 v-if="knowIndex == '3'"></imageCaptioning2>
+      <!-- <imageCaptioning3 v-if="knowIndex == '3'"></imageCaptioning3> -->
     </div>
   </div>
 </template>
@@ -62,8 +63,9 @@ import { reactive, ref, onMounted } from "vue";
 import imageCutouDraggablet2 from "@/views/pages/imageCutouDraggablet/index.vue";
 import imageProcessing from "@/views/pages/imageProcessing/index.vue";
 import imageProcessList from "@/views/pages/imageProcessList/imageProcessList.vue";
-import imageCaptioning from "@/views/pages/imageCaptioning/index.vue";
-import imageCaptioning2 from "@/views/pages/imageCaptioning/imageCaptioning.vue";
+import imageCaptioning from "@/views/pages/imageCaptioning/index.vue"; //纯前端读取
+import imageCaptioning2 from "@/views/pages/imageCaptioning/imageCaptioning.vue"; // 模拟后端读取（限定第一种格式）
+import imageCaptioning3 from "@/views/pages/imageCaptioning/imageCaptioning2.vue"; //  模拟后端读取（两种格式）
 import { useStore } from "vuex";
 import { getDefaultParams } from "@/api/api";
 

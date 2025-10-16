@@ -25,11 +25,11 @@
           <span v-if="textFile" class="file-name">{{ textFile.name }}</span>
         </div>
         <button
-          @click="uploadFiles"
+          @click="processFiles"
           class="btn btn-process"
-          :disabled="!hasFiles || isLoading"
+          :disabled="!hasFiles"
         >
-          {{ isLoading ? "处理中..." : "上传并处理文件" }}
+          处理文件
         </button>
       </div>
     </div>
@@ -72,6 +72,7 @@
             <span>{{ (maskOpacity * 100).toFixed(0) }}%</span>
           </div>
 
+          <!-- 扫描效果开关 -->
           <div class="control-group">
             <label class="checkbox-label">
               <input
@@ -83,6 +84,7 @@
             </label>
           </div>
 
+          <!-- 扫描位置控制（仅在显示扫描效果时显示） -->
           <div class="control-group" v-if="showScanEffect">
             <label>扫描位置:</label>
             <input
@@ -186,9 +188,9 @@
     </div>
 
     <!-- 错误提示 -->
-    <!-- <div v-if="errorMessage" class="error-message">
+    <div v-if="errorMessage" class="error-message">
       {{ errorMessage }}
-    </div> -->
+    </div>
 
     <!-- 加载状态 -->
     <div v-if="isLoading" class="loading-overlay">
@@ -200,18 +202,14 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
+import { mockData, colorMap } from "/public/mock";
 
 // 响应式数据
 const imageFile = ref(null);
 const textFile = ref(null);
 const originalImage = ref(null);
 const maskData = ref([]);
-const imageInfo = ref({
-  name: "",
-  width: 0,
-  height: 0,
-  size: "",
-});
+const imageInfo = ref({ name: "", width: 0, height: 0, size: "" });
 const statistics = ref([]);
 const canvasWidth = ref(0);
 const canvasHeight = ref(0);
@@ -227,38 +225,22 @@ const originalCanvas = ref(null);
 const maskCanvas = ref(null);
 const scanCanvas = ref(null);
 const canvasContainer = ref(null);
-
-// 标记 Canvas 是否已初始化
 const canvasInitialized = ref(false);
-
-// 颜色编码表
-const colorMap = {
-  0: { name: "城市土地", color: "rgba(0, 255, 255, 0.5)" },
-  1: { name: "农业用地", color: "rgba(255, 255, 0, 0.5)" },
-  2: { name: "牧场", color: "rgba(255, 0, 255, 0.5)" },
-  3: { name: "森林", color: "rgba(0, 255, 0, 0.5)" },
-  4: { name: "水系", color: "rgba(0, 0, 255, 0.5)" },
-  5: { name: "荒地", color: "rgba(255, 255, 255, 0.5)" },
-  6: { name: "未知土地", color: "rgba(0, 0, 0, 0.5)" },
-};
 
 // 计算属性
 const hasFiles = computed(() => imageFile.value && textFile.value);
 const hasData = computed(
-  () => originalImage.value && maskData.value.length > 0
+  () => originalImage.value && originalMaskData.value.length > 0
 );
-const scanLineStyle = computed(() => ({
-  left: `${scanPosition.value}%`,
-}));
+const scanLineStyle = computed(() => ({ left: `${scanPosition.value}%` }));
 
-// 监听 Canvas 引用变化
+// 初始化Canvas
 watch([originalCanvas, maskCanvas, scanCanvas], () => {
   if (originalCanvas.value && maskCanvas.value && scanCanvas.value) {
     initializeCanvasContexts();
   }
 });
 
-// 生命周期
 onMounted(() => {
   setTimeout(() => {
     if (originalCanvas.value && maskCanvas.value && scanCanvas.value) {
@@ -267,52 +249,33 @@ onMounted(() => {
   }, 300);
 });
 
-// 初始化 Canvas 上下文
 const initializeCanvasContexts = () => {
   try {
-    if (originalCanvas.value) {
-      originalCanvas.value.getContext("2d");
-    }
-
-    if (maskCanvas.value) {
-      maskCanvas.value.getContext("2d");
-    }
-
-    if (scanCanvas.value) {
-      scanCanvas.value.getContext("2d");
-    }
-
+    originalCanvas.value.getContext("2d");
+    maskCanvas.value.getContext("2d");
+    scanCanvas.value.getContext("2d");
     canvasInitialized.value = true;
-    console.log("Canvas contexts initialized successfully");
   } catch (error) {
-    console.error("Failed to initialize canvas contexts:", error);
     errorMessage.value = "Canvas初始化失败: " + error.message;
   }
 };
 
-// 安全地获取 Canvas 上下文
 const getSafeCanvasContext = (canvasElement, contextName = "canvas") => {
-  if (!canvasElement) {
+  if (!canvasElement)
     throw new Error(`${contextName} element is not available`);
-  }
-
   const context = canvasElement.getContext("2d");
-  if (!context) {
-    throw new Error(`${contextName} context is not available`);
-  }
-
+  if (!context) throw new Error(`${contextName} context is not available`);
   return context;
 };
 
+// 文件选择逻辑
 const handleImageUpload = (event) => {
   const file = event.target.files[0];
   if (!file) return;
-
   if (!file.type.match("image.*")) {
     errorMessage.value = "请选择图像文件 (PNG, JPG, JPEG)";
     return;
   }
-
   imageFile.value = file;
   imageInfo.value.name = file.name;
   imageInfo.value.size = formatFileSize(file.size);
@@ -322,139 +285,15 @@ const handleImageUpload = (event) => {
 const handleTextUpload = (event) => {
   const file = event.target.files[0];
   if (!file) return;
-
   if (!file.name.endsWith(".txt")) {
     errorMessage.value = "请选择TXT文件";
     return;
   }
-
   textFile.value = file;
   errorMessage.value = "";
 };
 
-// 上传文件到后端
-const uploadFiles = async () => {
-  if (!hasFiles.value) {
-    errorMessage.value = "请选择图像文件和标注文件";
-    return;
-  }
-
-  isLoading.value = true;
-  errorMessage.value = "";
-
-  try {
-    // 模拟后端处理延迟
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // 读取本地模拟的 JSON 数据文件
-    const mockResponse = await fetch("/mock.json");
-    if (!mockResponse.ok) {
-      throw new Error("无法加载模拟数据文件");
-    }
-
-    const result = await mockResponse.json();
-
-    if (result.success) {
-      // 1. 先加载图像显示
-      await loadImage();
-
-      // 使用模拟数据中的标注和统计信息
-      maskData.value = result.annotations;
-      originalMaskData.value = [...result.annotations];
-      statistics.value = result.statistics;
-
-      // 渲染
-      if (showScanEffect.value) {
-        updateScanLine();
-      } else {
-        renderMask();
-      }
-    } else {
-      throw new Error(result.message || "处理失败");
-    }
-  } catch (error) {
-    console.error("处理文件失败:", error);
-    errorMessage.value = `处理失败: ${error.message}`;
-  } finally {
-    isLoading.value = false;
-  }
-
-  //   try {
-  //     // 创建 FormData
-  //     const formData = new FormData();
-  //     formData.append("image", imageFile.value);
-  //     formData.append("annotation", textFile.value);
-
-  //     // 调用后端 API
-  //     const response = await fetch("/api/process-annotations", {
-  //       method: "POST",
-  //       body: formData,
-  //     });
-
-  //     if (!response.ok) {
-  //       throw new Error(`HTTP error! status: ${response.status}`);
-  //     }
-
-  //     const result = await response.json();
-
-  //     if (result.success) {
-  //       // 使用后端返回的数据
-  //       await loadImageFromBlob(result.imageData);
-  //       maskData.value = result.annotations;
-  //       originalMaskData.value = [...result.annotations];
-  //       statistics.value = result.statistics;
-
-  //       // 渲染
-  //       if (showScanEffect.value) {
-  //         updateScanLine();
-  //       } else {
-  //         renderMask();
-  //       }
-  //     } else {
-  //       throw new Error(result.message || "处理失败");
-  //     }
-  //   } catch (error) {
-  //     console.error("上传文件失败:", error);
-  //     errorMessage.value = `上传失败: ${error.message}`;
-  //   } finally {
-  //     isLoading.value = false;
-  //   }
-};
-
-// 从 Blob 数据加载图像
-const loadImageFromBlob = (imageBlob) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      originalImage.value = img;
-      canvasWidth.value = img.width;
-      canvasHeight.value = img.height;
-
-      setupCanvases();
-
-      try {
-        const ctx = getSafeCanvasContext(originalCanvas.value, "Original");
-        ctx.drawImage(img, 0, 0, canvasWidth.value, canvasHeight.value);
-
-        imageInfo.value.width = img.width;
-        imageInfo.value.height = img.height;
-
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
-    };
-
-    img.onerror = () => {
-      reject(new Error("图像加载失败"));
-    };
-
-    // 假设后端返回的是 base64 编码的图像数据
-    img.src = `data:image/png;base64,${imageBlob}`;
-  });
-};
-
-// 处理扫描效果切换
+// 扫描效果切换
 const handleScanEffectToggle = () => {
   if (showScanEffect.value) {
     scanPosition.value = 0;
@@ -464,9 +303,78 @@ const handleScanEffectToggle = () => {
   }
 };
 
+// 处理文件核心逻辑
+const processFiles = async () => {
+  if (!hasFiles.value) {
+    errorMessage.value = "请选择图像文件和标注文件";
+    return;
+  }
+
+  isLoading.value = true;
+  errorMessage.value = "";
+
+  try {
+    // 模拟网络延迟
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // 预留：未来对接后端的文件上传代码
+    // const formData = new FormData();
+    // formData.append("image", imageFile.value);
+    // formData.append("annotationFile", textFile.value);
+    // const response = await fetch("/api/process-annotations", {
+    //   method: "POST",
+    //   body: formData
+    // });
+    // const backendData = await response.json();
+
+    // 使用本地mock数据
+    const backendData = mockData;
+
+    // 赋值数据
+    maskData.value = backendData.maskData;
+    originalMaskData.value = [...backendData.maskData];
+    statistics.value = backendData.statistics;
+    imageInfo.value.width = backendData.imageInfo.width;
+    imageInfo.value.height = backendData.imageInfo.height;
+
+    // 加载图片
+    await loadImage();
+
+    // 渲染
+    if (showScanEffect.value) {
+      updateScanLine();
+    } else {
+      renderMask();
+    }
+  } catch (error) {
+    errorMessage.value = `处理失败: ${error.message}`;
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// 加载图片
+const loadImage = () => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      originalImage.value = img;
+      canvasWidth.value = img.width;
+      canvasHeight.value = img.height;
+      setupCanvases();
+
+      const ctx = getSafeCanvasContext(originalCanvas.value, "Original");
+      ctx.drawImage(img, 0, 0, canvasWidth.value, canvasHeight.value);
+      resolve();
+    };
+    img.onerror = () => reject(new Error("图像加载失败"));
+    img.src = URL.createObjectURL(imageFile.value);
+  });
+};
+
+// Canvas设置
 const setupCanvases = () => {
   const canvases = [originalCanvas.value, maskCanvas.value, scanCanvas.value];
-
   canvases.forEach((canvas) => {
     if (canvas) {
       canvas.width = canvasWidth.value;
@@ -482,17 +390,12 @@ const setupCanvases = () => {
     )}px`;
   }
 
-  if (originalCanvas.value) {
-    originalCanvas.value.style.zIndex = "1";
-  }
-  if (maskCanvas.value) {
-    maskCanvas.value.style.zIndex = "2";
-  }
-  if (scanCanvas.value) {
-    scanCanvas.value.style.zIndex = "3";
-  }
+  if (originalCanvas.value) originalCanvas.value.style.zIndex = "1";
+  if (maskCanvas.value) maskCanvas.value.style.zIndex = "2";
+  if (scanCanvas.value) scanCanvas.value.style.zIndex = "3";
 };
 
+// 渲染掩码
 const renderMask = () => {
   try {
     const ctx = getSafeCanvasContext(maskCanvas.value, "Mask");
@@ -501,7 +404,6 @@ const renderMask = () => {
     if (!showScanEffect.value) {
       maskData.value.forEach((mask) => {
         const color = getCategoryColor(mask.classId);
-
         if (mask.type === "polygon") {
           drawPolygonMask(ctx, mask.points, color);
           drawBoundingBox(ctx, mask.boundingBox, color, mask.classId);
@@ -510,8 +412,9 @@ const renderMask = () => {
           drawBoundingBox(ctx, mask.boundingBox, color, mask.classId);
         }
       });
-
       maskCanvas.value.style.opacity = maskOpacity.value;
+    } else {
+      maskCanvas.value.style.opacity = 0;
     }
 
     if (showScanEffect.value) {
@@ -523,6 +426,7 @@ const renderMask = () => {
   }
 };
 
+// 绘制多边形掩码
 const drawPolygonMask = (ctx, points, color) => {
   if (!points || points.length < 3) return;
 
@@ -544,6 +448,7 @@ const drawPolygonMask = (ctx, points, color) => {
   ctx.fill();
 };
 
+// 绘制边界框掩码
 const drawBoundingBoxMask = (ctx, bbox, color) => {
   ctx.fillStyle = color;
   ctx.globalAlpha = maskOpacity.value;
@@ -556,6 +461,7 @@ const drawBoundingBoxMask = (ctx, bbox, color) => {
   ctx.fillRect(x, y, width, height);
 };
 
+// 绘制边界框
 const drawBoundingBox = (ctx, bbox, color, classId) => {
   ctx.strokeStyle = color;
   ctx.lineWidth = 3;
@@ -567,42 +473,72 @@ const drawBoundingBox = (ctx, bbox, color, classId) => {
   const height = bbox.height * canvasHeight.value;
 
   ctx.strokeRect(x, y, width, height);
-
   drawClassIdLabel(ctx, x, y, width, height, classId, color);
-
   ctx.globalAlpha = maskOpacity.value;
 };
 
+// 绘制类别标签
 const drawClassIdLabel = (ctx, x, y, width, height, classId, color) => {
   const label = classId.toString();
   const padding = 5;
-
   const minDimension = Math.min(width, height);
-  const baseFontSize = Math.max(12, Math.min(24, minDimension * 0.15));
-  const fontSize = Math.round(baseFontSize);
+  const fontSize = Math.max(12, Math.min(24, minDimension * 0.15));
 
   ctx.font = `bold ${fontSize}px Arial`;
   const textWidth = ctx.measureText(label).width;
-
   const labelWidth = textWidth + padding * 2;
   const labelHeight = fontSize + padding * 2;
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
   ctx.fillRect(x, y, labelWidth, labelHeight);
-
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.strokeRect(x, y, labelWidth, labelHeight);
-
   ctx.fillStyle = "#333";
   ctx.textBaseline = "top";
   ctx.fillText(label, x + padding, y + padding);
 };
 
+// 计算多边形面积
+const calculatePolygonArea = (points) => {
+  if (!points || points.length < 3) return 0;
+
+  let area = 0;
+  const n = points.length;
+
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += points[i].x * points[j].y;
+    area -= points[j].x * points[i].y;
+  }
+
+  area = Math.abs(area) / 2;
+  return area * canvasWidth.value * canvasHeight.value;
+};
+
+// 计算多边形周长
+const calculatePolygonPerimeter = (points) => {
+  if (!points || points.length < 2) return 0;
+
+  let perimeter = 0;
+  const n = points.length;
+
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const dx = (points[j].x - points[i].x) * canvasWidth.value;
+    const dy = (points[j].y - points[i].y) * canvasHeight.value;
+    perimeter += Math.sqrt(dx * dx + dy * dy);
+  }
+
+  return perimeter;
+};
+
+// 更新扫描线
 const updateScanLine = () => {
   updateScanMask();
 };
 
+// 更新扫描掩码
 const updateScanMask = () => {
   try {
     const ctx = getSafeCanvasContext(scanCanvas.value, "Scan");
@@ -618,7 +554,6 @@ const updateScanMask = () => {
 
       maskData.value.forEach((mask) => {
         const color = getCategoryColor(mask.classId);
-
         if (mask.type === "polygon") {
           drawPolygonScanMask(ctx, mask.points, color);
         } else if (mask.type === "bbox") {
@@ -627,20 +562,14 @@ const updateScanMask = () => {
       });
 
       ctx.restore();
-
-      if (maskCanvas.value) {
-        maskCanvas.value.style.opacity = 0;
-      }
-    } else {
-      if (maskCanvas.value) {
-        maskCanvas.value.style.opacity = maskOpacity.value;
-      }
+      maskCanvas.value.style.opacity = 0;
     }
   } catch (error) {
     console.error("更新扫描遮罩失败:", error);
   }
 };
 
+// 绘制多边形扫描掩码
 const drawPolygonScanMask = (ctx, points, color) => {
   if (!points || points.length < 3) return;
 
@@ -662,6 +591,7 @@ const drawPolygonScanMask = (ctx, points, color) => {
   ctx.fill();
 };
 
+// 绘制边界框扫描掩码
 const drawBoundingBoxScanMask = (ctx, bbox, color) => {
   ctx.fillStyle = color;
   ctx.globalAlpha = maskOpacity.value;
@@ -674,54 +604,64 @@ const drawBoundingBoxScanMask = (ctx, bbox, color) => {
   ctx.fillRect(x, y, width, height);
 };
 
+// 清除扫描掩码
 const clearScanMask = () => {
   try {
     const ctx = getSafeCanvasContext(scanCanvas.value, "Scan");
     ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
-
-    if (maskCanvas.value) {
-      maskCanvas.value.style.opacity = maskOpacity.value;
-    }
+    maskCanvas.value.style.opacity = maskOpacity.value;
   } catch (error) {
     console.error("清除扫描遮罩失败:", error);
   }
 };
 
+// 高亮类别
 const highlightCategory = (classId) => {
-  if (!originalMaskData.value.length) {
+  if (originalMaskData.value.length === 0) {
     originalMaskData.value = [...maskData.value];
   }
-  maskData.value = originalMaskData.value.filter(
+
+  const filteredData = originalMaskData.value.filter(
     (mask) => mask.classId === classId
   );
-  renderMask();
+
+  if (filteredData.length > 0) {
+    maskData.value = filteredData;
+    renderMask();
+  }
 };
 
+// 重置高亮
 const resetHighlight = () => {
-  if (originalMaskData.value.length) {
+  if (originalMaskData.value.length > 0) {
     maskData.value = [...originalMaskData.value];
     renderMask();
   }
 };
 
+// 获取类别颜色
 const getCategoryColor = (classId) => {
   return colorMap[classId]?.color || "rgba(128, 128, 128, 0.5)";
 };
 
+// 获取类别名称
 const getCategoryName = (classId) => {
   return colorMap[classId]?.name || `类别 ${classId}`;
 };
 
+// 获取颜色样式
 const getColorStyle = (classId) => {
   return {
     backgroundColor: getCategoryColor(classId),
   };
 };
 
+// 格式化数字
 const formatNumber = (num) => {
   return num ? num.toLocaleString() : "0";
 };
 
+// 格式化文件大小
 const formatFileSize = (bytes) => {
   if (!bytes || bytes === 0) return "0 Bytes";
   const k = 1024;
@@ -732,6 +672,7 @@ const formatFileSize = (bytes) => {
 </script>
 
 <style lang="scss" scoped>
+// 样式保持不变...
 .app-container {
   display: flex;
   flex-direction: column;
