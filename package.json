@@ -1,6 +1,6 @@
 {
   "name": "image-cutout-app",
-  "version": "0.0.1",
+  "version": "1.0.1",
   "private": true,
   "description": "该应用用于图片切块。",
   "main": "electron/main.js",
@@ -8,7 +8,7 @@
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "dev": "concurrently \"npm run serve\" \"wait-on http://localhost:8080 && cross-env NODE_ENV=development electron ./electron/main.js\"",
-    "dist": "npm run build && electron-builder --publish=never --publish=always"
+    "dist": "npm run build && electron-builder --publish=always"
   },
   "build": {
     "appId": "com.example.myvueapp",
@@ -20,7 +20,13 @@
       {
         "provider": "github",
         "owner": "yabaizzz",
-        "repo": "ImageCutoutApp"
+        "repo": "ImageCutoutApp",
+        "releaseType": "release",
+        "private": true
+      },
+      {
+        "provider": "generic",
+        "url": "https://gitee.com/你的用户名/你的仓库/releases/download/"
       }
     ],
     "files": [
@@ -47,12 +53,14 @@
   "dependencies": {
     "@dataview/datav-vue3": "^0.0.0-test.1672506674342",
     "autofit.js": "^3.2.2",
+    "axios": "^1.12.2",
     "core-js": "^3.8.3",
     "echarts": "^5.5.1",
     "echarts-liquidfill": "^3.1.0",
     "electron-updater": "^6.6.2",
     "element-plus": "^2.11.3",
     "moment": "^2.30.1",
+    "qs": "^6.14.0",
     "vue": "^3.2.13",
     "vue-router": "^4.0.3",
     "vue-tianditu": "^2.7.6",
