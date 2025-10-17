@@ -534,30 +534,29 @@ const updateScanMask = () => {
       const scanX = (scanPosition.value / 100) * canvasWidth.value;
 
       ctx.save();
+      // 关键修改：剪辑区域改为扫描线左侧（已扫描部分）
       ctx.beginPath();
-      // 扫描线右侧区域（已扫描部分）
-      ctx.rect(scanX, 0, canvasWidth.value - scanX, canvasHeight.value);
+      ctx.rect(0, 0, scanX, canvasHeight.value);
       ctx.clip();
 
+      // 在已扫描区域绘制掩码
       maskData.value.forEach((mask) => {
         const color = getCategoryColor(mask.classId);
         if (mask.type === "polygon") {
-          // 原有：处理多边形扫描
           drawPolygonScanMask(ctx, mask.points, color);
         } else if (mask.type === "boundingBox") {
-          // 新增：处理边界框扫描
           drawBoundingBoxScanMask(ctx, mask.boundingBox, color);
         }
       });
 
       ctx.restore();
-      maskCanvas.value.style.opacity = 0; // 隐藏基础掩码，只显示扫描区域
+      // 隐藏基础掩码，只显示扫描区域内的掩码
+      maskCanvas.value.style.opacity = 0;
     }
   } catch (error) {
     console.error("更新扫描遮罩失败:", error);
   }
 };
-
 // 绘制多边形扫描掩码
 const drawPolygonScanMask = (ctx, points, color) => {
   if (!points || points.length < 3) return;
@@ -598,6 +597,7 @@ const clearScanMask = () => {
   try {
     const ctx = getSafeCanvasContext(scanCanvas.value, "Scan");
     ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
+    // 恢复基础掩码显示
     maskCanvas.value.style.opacity = maskOpacity.value;
   } catch (error) {
     console.error("清除扫描遮罩失败:", error);
