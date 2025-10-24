@@ -55,6 +55,19 @@ function initAutoUpdater() {
     console.error("自动更新错误:", err);
     mainWindow.webContents.send("update-error", err.message);
   });
+
+  // 在已有的initAutoUpdater函数下方添加
+  ipcMain.on("check-for-updates", () => {
+    if (!isDev) {
+      // 只在生产环境执行
+      autoUpdater.checkForUpdatesAndNotify();
+
+      // 检查到没有更新时的处理
+      autoUpdater.once("update-not-available", () => {
+        mainWindow.webContents.send("update-not-available");
+      });
+    }
+  });
 }
 // 让渲染进程触发安装
 ipcMain.on("install-update", () => {

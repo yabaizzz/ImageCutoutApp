@@ -15,7 +15,7 @@
         list-type="text"
       >
         <el-button size="default" type="primary">
-          <el-icon><UploadFilled /></el-icon> 选择特殊图像文件
+          <el-icon><UploadFilled /></el-icon> 选择特殊图像文件（演示用）
         </el-button>
       </el-upload>
     </div>
@@ -125,18 +125,16 @@
         </el-table>
       </el-card>
 
-      <!-- 标注文件下载提示 -->
+      <!-- 标注文件下载 -->
       <div v-if="showDownload" class="download-section">
-        <el-button
-          type="primary"
-          size="small"
-          @click="downloadCanvasImage"
-          :loading="isDownloading"
-          :disabled="!showResult || filteredRegions.length === 0"
+        <el-tooltip
+          class="item"
+          effect="dark"
+          content="标注格式：类别ID 归一化x1 归一化y1 归一化x2 归一化y2 ..."
+          placement="top"
         >
-          <el-icon><Download /></el-icon>
-          下载当前图像
-        </el-button>
+          <el-icon class="tooltip-icon"><QuestionFilled /></el-icon>
+        </el-tooltip>
       </div>
     </div>
 
@@ -158,11 +156,12 @@
 </template>
 
 <script setup>
-import { ref, nextTick, watch } from "vue";
+import { ref, onMounted, nextTick, watch } from "vue";
+
 import { fileUpload2 } from "@/api/api.js";
 import { ElMessage } from "element-plus";
 
-// 基础响应式数据
+// 1. 基础响应式数据
 const fileList = ref([]);
 const showProcessDialog = ref(false);
 const processText = ref("");
@@ -175,7 +174,7 @@ const showStats = ref(false);
 const renderCanvas = ref(null);
 const renderInfo = ref("");
 
-// 图像处理相关数据
+// 2. 图像处理相关数据
 const imgWidth = ref(null);
 const imgHeight = ref(null);
 const coloredImageData = ref(null);
@@ -183,9 +182,9 @@ const allRegions = ref([]);
 const filteredRegions = ref([]);
 const allStats = ref([]);
 const filteredStats = ref([]);
-// 添加下载状态变量
-const isDownloading = ref(false);
-// 类别-颜色映射表
+const annotationText = ref("");
+
+// 3. 类别-颜色映射表
 const categoryColorMap = ref({
   0: { rgb: [0, 0, 0], name: "类别0（示例：建筑区）" },
   1: { rgb: [255, 255, 0], name: "类别1（示例：植被区）" },
@@ -199,15 +198,16 @@ const categoryColorMap = ref({
   9: { rgb: [128, 128, 0], name: "类别9（预留）" },
 });
 
-// 滤波参数
+// 4. 滤波参数
 const filterParams = ref({
   minArea: 100,
   maxAspectRatio: 10,
   targetCategory: -1,
 });
 
-// 重置所有状态
+// 新增：重置所有状态
 const resetAllState = () => {
+  // 重置基础状态
   showProcessDialog.value = false;
   processText.value = "";
   showFilterControls.value = false;
@@ -218,6 +218,7 @@ const resetAllState = () => {
   showStats.value = false;
   renderInfo.value = "";
 
+  // 重置图像数据
   imgWidth.value = null;
   imgHeight.value = null;
   coloredImageData.value = null;
@@ -225,13 +226,16 @@ const resetAllState = () => {
   filteredRegions.value = [];
   allStats.value = [];
   filteredStats.value = [];
+  annotationText.value = "";
 
+  // 重置滤波参数
   filterParams.value = {
     minArea: 100,
     maxAspectRatio: 10,
     targetCategory: -1,
   };
 
+  // 清除Canvas
   if (renderCanvas.value) {
     const ctx = renderCanvas.value.getContext("2d");
     if (ctx) {
@@ -242,19 +246,28 @@ const resetAllState = () => {
   }
 };
 
-// 文件上传处理
+// 5. 文件上传处理 - 修复：使用异步确保弹窗立即显示
 const handleFileChange = async (uploadFile) => {
+  // 重置所有内容
   resetAllState();
+
   fileList.value = [uploadFile.raw];
 
+  // 立即显示弹窗并更新文本
   showProcessDialog.value = true;
   processText.value = "开始上传图像...";
+
+  // 使用nextTick确保DOM更新
   await nextTick();
 
   try {
     const res = await fileUpload2(uploadFile.raw);
+    console.log("上传成功", res);
+
+    // 确保弹窗仍然显示并更新状态
     processText.value = "开始处理图像数据...";
     await nextTick();
+
     await RenderData(res.data);
   } catch (error) {
     console.error("上传失败", error);
@@ -263,37 +276,35 @@ const handleFileChange = async (uploadFile) => {
   }
 };
 
-// 加载数据并渲染
+// 6. 核心：加载数据并渲染 - 优化：拆分大数据处理
 const RenderData = async (mockData) => {
   try {
     imgWidth.value = mockData.imageInfo.width;
     imgHeight.value = mockData.imageInfo.height;
 
-    // ========== 阶段1：快速解析数据 ==========
-    processText.value = "正在快速解析数据...";
+    // ========== 阶段1：解析数据 ==========
+    processText.value = "正在解析数据（区域+统计）...";
     await nextTick();
 
+    // 分批解析 maskData，避免阻塞
     await processRegionsInBatches(mockData.maskData);
+
     allStats.value = [...mockData.statistics];
 
-    await sleep(20);
+    // 给 UI 一点喘息时间
+    await sleep(50);
 
-    // ========== 阶段2：动态设置滤波参数 ==========
-    processText.value = "正在设置动态滤波参数...";
+    // ========== 阶段2：应用默认滤波 ==========
+    processText.value = "正在应用默认滤波参数...";
     await nextTick();
-
-    setDefaultMaxAspectRatio();
-    filterParams.value.minArea = 0;
-    filterParams.value.targetCategory = -1;
-
     await applyDefaultFilter();
-    await sleep(20);
+    await sleep(50);
 
     // ========== 阶段3：生成彩色映射图像 ==========
     processText.value = "正在生成彩色映射图像...";
     await nextTick();
     await generateMockColoredImage(filteredRegions.value);
-    await sleep(20);
+    await sleep(50);
 
     // ========== 阶段4：准备渲染 ==========
     processText.value = "正在准备渲染画布...";
@@ -315,24 +326,17 @@ const RenderData = async (mockData) => {
     // ========== 阶段6：收尾 ==========
     showDownload.value = true;
     showStats.value = true;
+    generateAnnotationText();
 
-    const totalRegions = allRegions.value.length;
-    const validRegions = allRegions.value.filter((r) => r.isValid).length;
-    const displayedRegions = filteredRegions.value.length;
+    renderInfo.value = `显示 ${filteredRegions.value.length} 个区域（共 ${allRegions.value.length} 个）`;
 
-    renderInfo.value = `显示 ${displayedRegions} 个区域（共 ${totalRegions} 个，其中有效 ${validRegions} 个）`;
-
+    // 延时关闭弹窗，保证“处理完成”能看到
     processText.value = "处理完成！";
     await nextTick();
-    await sleep(300);
+    await sleep(500);
 
     showProcessDialog.value = false;
-
-    if (displayedRegions === 0 && totalRegions > 0) {
-      ElMessage.warning(`处理完成，但没有显示任何区域。请检查滤波参数设置。`);
-    } else {
-      ElMessage.success(`处理完成，显示 ${displayedRegions} 个区域`);
-    }
+    ElMessage.success(`处理完成，显示 ${filteredRegions.value.length} 个区域`);
   } catch (error) {
     console.error("数据加载失败：", error);
     processText.value = `加载失败：${error.message}`;
@@ -346,133 +350,64 @@ const RenderData = async (mockData) => {
 // 小辅助函数
 const sleep = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// 分批次处理区域数据
-const processRegionsInBatches = async (maskData, batchSize = 200) => {
+// 新增：分批次处理区域数据，避免UI卡顿
+const processRegionsInBatches = async (maskData, batchSize = 50) => {
   const regions = [];
 
   for (let i = 0; i < maskData.length; i += batchSize) {
     const batch = maskData.slice(i, i + batchSize);
 
-    if (i % 500 === 0) {
-      processText.value = `正在验证数据... ${i}/${maskData.length}`;
+    // 定期更新进度文本
+    if (i % 200 === 0) {
+      processText.value = `正在解析数据... ${i}/${maskData.length}`;
       await nextTick();
     }
 
-    const batchRegions = batch.map((region) => {
-      const validation = {
-        hasPoints: !!region.points,
-        hasEnoughPoints: region.points && region.points.length >= 3,
-        hasValidPoints:
-          region.points &&
-          region.points.every(
-            (point) =>
-              point.x !== undefined &&
-              point.y !== undefined &&
-              !isNaN(point.x) &&
-              !isNaN(point.y) &&
-              point.x >= 0 &&
-              point.x <= 1 &&
-              point.y >= 0 &&
-              point.y <= 1
-          ),
-        hasArea: region.area !== undefined && region.area !== null,
-        hasPositiveArea: region.area > 0,
-        hasValidArea: !isNaN(region.area) && isFinite(region.area),
-        hasAspectRatio:
-          region.aspectRatio !== undefined && region.aspectRatio !== null,
-        hasValidAspectRatio:
-          !isNaN(region.aspectRatio) &&
-          isFinite(region.aspectRatio) &&
-          region.aspectRatio > 0,
-        hasBoundingBox: !!region.boundingBox,
-        hasValidBoundingBox:
-          region.boundingBox &&
-          region.boundingBox.width > 0 &&
-          region.boundingBox.height > 0 &&
-          !isNaN(region.boundingBox.x) &&
-          !isNaN(region.boundingBox.y) &&
-          !isNaN(region.boundingBox.width) &&
-          !isNaN(region.boundingBox.height),
-      };
+    const batchRegions = batch
+      .map((region) => {
+        const points = region.points || [];
+        const boundingBox = region.boundingBox || calculateBoundingBox(points);
 
-      const isValid =
-        validation.hasPoints &&
-        validation.hasEnoughPoints &&
-        validation.hasValidPoints &&
-        validation.hasArea &&
-        validation.hasPositiveArea &&
-        validation.hasValidArea &&
-        validation.hasAspectRatio &&
-        validation.hasValidAspectRatio &&
-        validation.hasBoundingBox &&
-        validation.hasValidBoundingBox;
+        const area = getRegionArea(points, imgWidth.value, imgHeight.value);
+        const aspectRatio = calculateAspectRatio(
+          boundingBox,
+          imgWidth.value,
+          imgHeight.value
+        );
 
-      return {
-        categoryId: region.classId,
-        polygonVertices: region.points
-          ? region.points.map((point) => [point.x, point.y])
-          : [],
-        boundingBox: region.boundingBox || { x: 0, y: 0, width: 0, height: 0 },
-        area: region.area || 0,
-        aspectRatio: region.aspectRatio || 1,
-        perimeter: region.perimeter || 0,
-        isValid: isValid,
-      };
-    });
+        const isValid =
+          area > 0 &&
+          aspectRatio >= 1 &&
+          !isNaN(area) &&
+          !isNaN(aspectRatio) &&
+          isFinite(area) &&
+          isFinite(aspectRatio) &&
+          points.length >= 3;
+
+        return {
+          categoryId: region.classId,
+          polygonVertices: points.map((point) => [point.x, point.y]),
+          boundingBox: boundingBox,
+          area: area,
+          aspectRatio: aspectRatio,
+          isValid: isValid,
+        };
+      })
+      .filter((region) => region.isValid);
 
     regions.push(...batchRegions);
   }
 
   allRegions.value = regions;
-  return regions;
-};
-
-// 动态计算最大长宽比
-const setDefaultMaxAspectRatio = () => {
-  if (allRegions.value.length === 0) {
-    filterParams.value.maxAspectRatio = 20;
-    return;
-  }
-
-  try {
-    const validAspectRatios = allRegions.value
-      .filter((region) => region.isValid && region.aspectRatio > 0)
-      .map((region) => region.aspectRatio);
-
-    if (validAspectRatios.length === 0) {
-      filterParams.value.maxAspectRatio = 20;
-      return;
-    }
-
-    const maxAspect = Math.max(...validAspectRatios);
-    let buffer;
-    if (maxAspect < 3) {
-      buffer = 3;
-    } else if (maxAspect < 10) {
-      buffer = maxAspect * 0.5;
-    } else if (maxAspect < 50) {
-      buffer = maxAspect * 0.3;
-    } else {
-      buffer = maxAspect * 0.2;
-    }
-
-    buffer = Math.max(2, buffer);
-    const calculatedMaxAspect = Math.ceil(maxAspect + buffer);
-    filterParams.value.maxAspectRatio = Math.min(100, calculatedMaxAspect);
-  } catch (error) {
-    console.error("计算最大长宽比失败:", error);
-    filterParams.value.maxAspectRatio = 20;
-  }
-
-  filterParams.value.minArea = 0;
 };
 
 // 应用默认滤波
 const applyDefaultFilter = async () => {
-  const minArea = Math.max(0, filterParams.value.minArea || 0);
-  const maxAspectRatio = Math.max(1, filterParams.value.maxAspectRatio || 100);
+  const minArea = Math.max(0, filterParams.value.minArea || 100);
+  const maxAspectRatio = Math.max(1, filterParams.value.maxAspectRatio || 10);
   const targetCategory = filterParams.value.targetCategory;
 
+  // 滤波区域
   const filtered = allRegions.value.filter((region) => {
     if (!region.isValid) return false;
 
@@ -484,6 +419,7 @@ const applyDefaultFilter = async () => {
     return categoryMatch && areaMatch && aspectRatioMatch;
   });
 
+  // 滤波统计
   const filteredStatsData =
     targetCategory === -1
       ? [...allStats.value]
@@ -493,7 +429,35 @@ const applyDefaultFilter = async () => {
   filteredStats.value = filteredStatsData;
 };
 
-// 生成彩色图像
+// 7. 计算边界框
+const calculateBoundingBox = (points) => {
+  if (!points || points.length === 0) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
+
+  let minX = 1,
+    minY = 1,
+    maxX = 0,
+    maxY = 0;
+  points.forEach((point) => {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  });
+
+  const width = Math.max(0.001, maxX - minX);
+  const height = Math.max(0.001, maxY - minY);
+
+  return {
+    x: minX,
+    y: minY,
+    width: width,
+    height: height,
+  };
+};
+
+// 8. 生成彩色图像
 const generateMockColoredImage = (regions) => {
   return new Promise((resolve) => {
     const canvas = document.createElement("canvas");
@@ -501,16 +465,19 @@ const generateMockColoredImage = (regions) => {
     canvas.height = imgHeight.value;
     const ctx = canvas.getContext("2d");
 
+    // 创建背景（浅灰色）
     const coloredData = ctx.createImageData(canvas.width, canvas.height);
     const data = coloredData.data;
 
+    // 初始化背景为浅灰色
     for (let i = 0; i < data.length; i += 4) {
-      data[i] = 240;
-      data[i + 1] = 240;
-      data[i + 2] = 240;
-      data[i + 3] = 255;
+      data[i] = 240; // R
+      data[i + 1] = 240; // G
+      data[i + 2] = 240; // B
+      data[i + 3] = 255; // A
     }
 
+    // 为每个区域填充颜色
     regions.forEach((region) => {
       if (!region.isValid) return;
 
@@ -519,11 +486,13 @@ const generateMockColoredImage = (regions) => {
         rgb: [128, 128, 128],
       };
 
+      // 创建临时Canvas来绘制多边形掩码
       const maskCanvas = document.createElement("canvas");
       maskCanvas.width = canvas.width;
       maskCanvas.height = canvas.height;
       const maskCtx = maskCanvas.getContext("2d");
 
+      // 绘制多边形
       maskCtx.beginPath();
       let hasValidPoints = false;
 
@@ -550,29 +519,25 @@ const generateMockColoredImage = (regions) => {
       }
 
       if (hasValidPoints && polygonVertices.length >= 3) {
-        try {
-          maskCtx.closePath();
-          maskCtx.fillStyle = "white";
-          maskCtx.fill();
+        maskCtx.closePath();
+        maskCtx.fillStyle = "white";
+        maskCtx.fill();
 
-          const maskData = maskCtx.getImageData(
-            0,
-            0,
-            canvas.width,
-            canvas.height
-          );
+        const maskData = maskCtx.getImageData(
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
 
-          for (let i = 0; i < maskData.data.length; i += 4) {
-            if (maskData.data[i] > 128) {
-              const pixelIndex = i;
-              data[pixelIndex] = color.rgb[0];
-              data[pixelIndex + 1] = color.rgb[1];
-              data[pixelIndex + 2] = color.rgb[2];
-              data[pixelIndex + 3] = 255;
-            }
+        for (let i = 0; i < maskData.data.length; i += 4) {
+          if (maskData.data[i] > 128) {
+            const pixelIndex = i;
+            data[pixelIndex] = color.rgb[0];
+            data[pixelIndex + 1] = color.rgb[1];
+            data[pixelIndex + 2] = color.rgb[2];
+            data[pixelIndex + 3] = 255;
           }
-        } catch (error) {
-          console.warn(`绘制区域失败:`, error);
         }
       }
     });
@@ -582,7 +547,44 @@ const generateMockColoredImage = (regions) => {
   });
 };
 
-// 初始化Canvas并渲染结果
+// 9. 辅助函数：计算区域面积
+const getRegionArea = (points, width, height) => {
+  if (!points || points.length < 3) return 0;
+
+  const vertices = points.map((point) => [point.x * width, point.y * height]);
+  let area = 0;
+  const n = vertices.length;
+  for (let i = 0; i < n; i++) {
+    const [x1, y1] = vertices[i];
+    const [x2, y2] = vertices[(i + 1) % n];
+    area += x1 * y2 - x2 * y1;
+  }
+  const calculatedArea = Math.abs(area) / 2;
+
+  return Math.max(
+    0,
+    isNaN(calculatedArea) || !isFinite(calculatedArea) ? 0 : calculatedArea
+  );
+};
+
+// 10. 辅助函数：计算长宽比
+const calculateAspectRatio = (bbox, width, height) => {
+  const pixelWidth = bbox.width * width;
+  const pixelHeight = bbox.height * height;
+
+  if (pixelWidth <= 0 || pixelHeight <= 0) {
+    return 1;
+  }
+
+  const ratio =
+    pixelWidth > pixelHeight
+      ? pixelWidth / pixelHeight
+      : pixelHeight / pixelWidth;
+
+  return Math.max(1, isNaN(ratio) || !isFinite(ratio) ? 1 : ratio);
+};
+
+// 11. 初始化Canvas并渲染结果
 const initCanvasAndRender = (canvas) => {
   return new Promise((resolve, reject) => {
     try {
@@ -597,6 +599,7 @@ const initCanvasAndRender = (canvas) => {
         return;
       }
 
+      // 设置Canvas尺寸
       const container = canvas.parentElement;
       const maxWidth = 800;
       const scale = Math.min(
@@ -608,19 +611,24 @@ const initCanvasAndRender = (canvas) => {
       canvas.width = imgWidth.value * scale;
       canvas.height = imgHeight.value * scale;
 
+      // 清除Canvas并正确绘制
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // 创建临时Canvas用于缩放绘制
       const tempCanvas = document.createElement("canvas");
       tempCanvas.width = imgWidth.value;
       tempCanvas.height = imgHeight.value;
       const tempCtx = tempCanvas.getContext("2d");
 
+      // 在临时Canvas上绘制图像数据
       if (coloredImageData.value) {
         tempCtx.putImageData(coloredImageData.value, 0, 0);
       }
 
+      // 在临时Canvas上绘制区域边界
       drawFilteredRegions(tempCtx);
 
+      // 将临时Canvas内容缩放到主Canvas
       ctx.drawImage(
         tempCanvas,
         0,
@@ -641,7 +649,7 @@ const initCanvasAndRender = (canvas) => {
   });
 };
 
-// 绘制滤波后区域
+// 12. 绘制滤波后区域 - 修复：去除红色虚线边界框和所有标注
 const drawFilteredRegions = (ctx) => {
   const regions = filteredRegions.value;
   if (regions.length === 0) return;
@@ -654,6 +662,7 @@ const drawFilteredRegions = (ctx) => {
       rgb: [128, 128, 128],
     };
 
+    // 只绘制多边形边界，不绘制边界框和标签
     ctx.save();
     ctx.beginPath();
     let hasValidPoints = false;
@@ -687,10 +696,28 @@ const drawFilteredRegions = (ctx) => {
       ctx.stroke();
     }
     ctx.restore();
+
+    // 注释掉边界框绘制代码，去除红色虚线
+    // if (boundingBox && boundingBox.width > 0 && boundingBox.height > 0) {
+    //   ctx.save();
+    //   const bboxX = boundingBox.x * imgWidth.value;
+    //   const bboxY = boundingBox.y * imgHeight.value;
+    //   const bboxW = boundingBox.width * imgWidth.value;
+    //   const bboxH = boundingBox.height * imgHeight.value;
+
+    //   if (bboxW > 0 && bboxH > 0 && !isNaN(bboxX) && !isNaN(bboxY)) {
+    //     ctx.strokeStyle = "#ff0000";
+    //     ctx.lineWidth = 1.5;
+    //     ctx.setLineDash([8, 4]);
+    //     ctx.strokeRect(bboxX, bboxY, bboxW, bboxH);
+    //     ctx.setLineDash([]);
+    //   }
+    //   ctx.restore();
+    // }
   });
 };
 
-// 应用滤波
+// 13. 应用滤波
 const applyFilter = async () => {
   if (allRegions.value.length === 0) {
     ElMessage.warning("错误：无区域数据可滤波，请重新加载数据！");
@@ -703,20 +730,42 @@ const applyFilter = async () => {
   await nextTick();
 
   try {
+    const minArea = Math.max(0, filterParams.value.minArea || 100);
+    const maxAspectRatio = Math.max(1, filterParams.value.maxAspectRatio || 10);
     const targetCategory = filterParams.value.targetCategory;
 
+    // ========== 阶段1：滤波 ==========
     processText.value = "正在筛选有效区域...";
     await nextTick();
-    await sleep(10);
+    await sleep(20);
 
-    await applyDefaultFilter();
-    await sleep(10);
+    const filtered = allRegions.value.filter((region) => {
+      if (!region.isValid) return false;
 
+      const categoryMatch =
+        targetCategory === -1 || region.categoryId === targetCategory;
+      const areaMatch = region.area >= minArea;
+      const aspectRatioMatch = region.aspectRatio <= maxAspectRatio;
+
+      return categoryMatch && areaMatch && aspectRatioMatch;
+    });
+
+    const filteredStatsData =
+      targetCategory === -1
+        ? [...allStats.value]
+        : allStats.value.filter((stat) => stat.classId === targetCategory);
+
+    filteredRegions.value = filtered;
+    filteredStats.value = filteredStatsData;
+    await sleep(20);
+
+    // ========== 阶段2：生成彩色图像 ==========
     processText.value = "正在重新生成彩色图像...";
     await nextTick();
     await generateMockColoredImage(filteredRegions.value);
-    await sleep(20);
+    await sleep(30);
 
+    // ========== 阶段3：渲染 Canvas ==========
     processText.value = "正在重新渲染滤波结果...";
     await nextTick();
 
@@ -725,13 +774,15 @@ const applyFilter = async () => {
     if (!canvas) throw new Error("应用滤波时Canvas元素未找到");
 
     await initCanvasAndRender(canvas);
-    await sleep(10);
+    await sleep(20);
 
-    renderInfo.value = `显示 ${filteredRegions.value.length} 个区域（共 ${allRegions.value.length} 个）`;
+    // ========== 阶段4：收尾 ==========
+    generateAnnotationText();
+    renderInfo.value = `显示 ${filtered.length} 个区域（共 ${allRegions.value.length} 个）`;
 
     processText.value = "滤波完成！";
     await nextTick();
-    await sleep(200);
+    await sleep(300);
 
     showProcessDialog.value = false;
     isFiltering.value = false;
@@ -739,7 +790,7 @@ const applyFilter = async () => {
     const categoryText =
       targetCategory === -1 ? "全部类别" : `类别${targetCategory}`;
     ElMessage.success(
-      `滤波完成：${categoryText}共保留${filteredRegions.value.length}个有效区域`
+      `滤波完成：${categoryText}共保留${filtered.length}个有效区域`
     );
   } catch (error) {
     console.error("滤波失败：", error);
@@ -752,110 +803,53 @@ const applyFilter = async () => {
   }
 };
 
-// 重置滤波功能 - 添加弹窗提示
+// 14. 重置滤波功能
 const resetFilter = async () => {
-  showProcessDialog.value = true;
-  processText.value = "正在重置滤波参数...";
-  await nextTick();
+  // 重置滤波参数为默认值
+  filterParams.value = {
+    minArea: 100,
+    maxAspectRatio: 10,
+    targetCategory: -1,
+  };
 
-  try {
-    filterParams.value = {
-      minArea: 0,
-      maxAspectRatio: 10,
-      targetCategory: -1,
-    };
+  // 应用默认滤波
+  await applyDefaultFilter();
 
-    processText.value = "正在重新计算默认参数...";
-    await nextTick();
-    setDefaultMaxAspectRatio();
+  // 重新生成彩色图像和渲染
+  await generateMockColoredImage(filteredRegions.value);
 
-    processText.value = "正在应用默认滤波...";
-    await nextTick();
-    await applyDefaultFilter();
-
-    processText.value = "正在重新生成图像...";
-    await nextTick();
-    await generateMockColoredImage(filteredRegions.value);
-
-    processText.value = "正在重新渲染...";
-    await nextTick();
-
-    if (renderCanvas.value) {
-      await initCanvasAndRender(renderCanvas.value);
-    }
-
-    renderInfo.value = `显示 ${filteredRegions.value.length} 个区域（共 ${allRegions.value.length} 个）`;
-
-    processText.value = "重置完成！";
-    await nextTick();
-    await sleep(300);
-
-    showProcessDialog.value = false;
-    ElMessage.success("已重置滤波，显示所有区域");
-  } catch (error) {
-    console.error("重置滤波失败：", error);
-    processText.value = `重置失败：${error.message}`;
-    await nextTick();
-    await sleep(1000);
-    showProcessDialog.value = false;
-    ElMessage.error(`重置滤波失败：${error.message}`);
+  if (renderCanvas.value) {
+    await initCanvasAndRender(renderCanvas.value);
   }
+
+  renderInfo.value = `显示 ${filteredRegions.value.length} 个区域（共 ${allRegions.value.length} 个）`;
+  ElMessage.success("已重置滤波，显示默认滤波结果");
 };
 
-// 辅助函数：获取类别颜色
+// 15. 生成标注文件内容
+const generateAnnotationText = () => {
+  let text = "";
+  filteredRegions.value.forEach((region) => {
+    if (!region.isValid) return;
+
+    const parts = [region.categoryId];
+    region.polygonVertices.forEach(([x, y]) => {
+      parts.push(x.toFixed(6));
+      parts.push(y.toFixed(6));
+    });
+    text += parts.join(" ") + "\n";
+  });
+  annotationText.value = text;
+};
+
+// 16. 辅助函数：获取类别颜色
 const getCategoryColor = (classId) => {
   const color = categoryColorMap.value[classId] || { rgb: [128, 128, 128] };
   return `rgb(${color.rgb[0]}, ${color.rgb[1]}, ${color.rgb[2]})`;
 };
 
-// 下载 Canvas 图像功能
-const downloadCanvasImage = async () => {
-  if (!renderCanvas.value) {
-    ElMessage.warning("没有可下载的图像内容");
-    return;
-  }
-
-  if (!showResult.value || filteredRegions.value.length === 0) {
-    ElMessage.warning("请先处理图像并确保有结果显示");
-    return;
-  }
-
-  isDownloading.value = true;
-
-  try {
-    const canvas = renderCanvas.value;
-
-    // 将 Canvas 转换为 Data URL
-    const dataUrl = canvas.toDataURL("image/png", 1.0);
-
-    // 生成文件名
-    const timestamp = new Date()
-      .toLocaleString("zh-CN")
-      .replace(/[\/:\\]/g, "-")
-      .replace(/\s/g, "_")
-      .replace(/:/g, "-");
-    const filename = `图像处理结果_${timestamp}.png`;
-
-    // 直接使用现有的 save-image IPC
-    const result = await window.electronAPI.saveImage(dataUrl, filename);
-
-    if (result.success) {
-      ElMessage.success({
-        message: `图像已保存到: ${result.path}`,
-        duration: 5000,
-      });
-    } else {
-      if (result.message !== "用户取消保存") {
-        throw new Error(result.message);
-      }
-    }
-  } catch (error) {
-    console.error("下载图像失败:", error);
-    ElMessage.error(`下载失败: ${error.message}`);
-  } finally {
-    isDownloading.value = false;
-  }
-};
+// 组件挂载初始化
+onMounted(() => {});
 
 // 监听showResult变化，确保Canvas生成后初始化背景
 watch(showResult, (newVal) => {

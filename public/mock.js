@@ -8,32 +8,6 @@ export const mockData = {
     height: 800,
     size: "2.4 MB",
   },
-  statistics: [
-    {
-      classId: 0,
-      count: 13,
-      area: 216815,
-      perimeter: 6806,
-    },
-    {
-      classId: 1,
-      count: 5,
-      area: 498944,
-      perimeter: 6902,
-    },
-    {
-      classId: 2,
-      count: 7,
-      area: 887553,
-      perimeter: 8236,
-    },
-    {
-      classId: 3,
-      count: 1,
-      area: 5783699,
-      perimeter: 12581,
-    },
-  ],
   maskData: [
     {
       classId: 0,
@@ -33405,7 +33379,7 @@ export const mockData = {
       points: [
         {
           x: 0.191176,
-          y: 0,
+          y: 0.0,
         },
         {
           x: 0.191176,
@@ -33805,12 +33779,12 @@ export const mockData = {
         },
         {
           x: 0.240196,
-          y: 0,
+          y: 0.0,
         },
       ],
       boundingBox: {
         x: 0.186683,
-        y: 0,
+        y: 0.0,
         width: 0.06004900000000002,
         height: 0.074755,
       },
@@ -33820,11 +33794,11 @@ export const mockData = {
       type: "polygon",
       points: [
         {
-          x: 0,
-          y: 0,
+          x: 0.0,
+          y: 0.0,
         },
         {
-          x: 0,
+          x: 0.0,
           y: 0.999592,
         },
         {
@@ -39741,11 +39715,11 @@ export const mockData = {
         },
         {
           x: 0.999592,
-          y: 0,
+          y: 0.0,
         },
         {
           x: 0.240605,
-          y: 0,
+          y: 0.0,
         },
         {
           x: 0.240605,
@@ -40153,15 +40127,41 @@ export const mockData = {
         },
         {
           x: 0.190768,
-          y: 0,
+          y: 0.0,
         },
       ],
       boundingBox: {
-        x: 0,
-        y: 0,
+        x: 0.0,
+        y: 0.0,
         width: 0.999592,
         height: 0.999592,
       },
+    },
+  ],
+  statistics: [
+    {
+      classId: 0,
+      count: 13,
+      area: 216806,
+      perimeter: 6799,
+    },
+    {
+      classId: 1,
+      count: 5,
+      area: 498942,
+      perimeter: 6901,
+    },
+    {
+      classId: 2,
+      count: 7,
+      area: 887551,
+      perimeter: 8233,
+    },
+    {
+      classId: 3,
+      count: 1,
+      area: 5783699,
+      perimeter: 12581,
     },
   ],
 };

@@ -35,15 +35,27 @@
             </el-menu-item>
           </el-menu-item-group>
         </el-sub-menu>
-        <el-menu-item index="3">
-          <el-icon :size="size" :color="color">
-            <Edit />
-          </el-icon>
-          <span>图像标注</span>
-        </el-menu-item>
-        <!-- <el-menu-item index="2">
-          <span>图像处理</span>
-        </el-menu-item> -->
+        <el-sub-menu index="3">
+          <template #title>
+            <el-icon :size="size" :color="color">
+              <Edit />
+            </el-icon>
+            <span>图像标注</span>
+          </template>
+          <el-menu-item index="3-1">
+            <el-icon :size="size" :color="color">
+              <Edit />
+            </el-icon>
+            <span>普通图像标注</span>
+          </el-menu-item>
+          <el-menu-item index="3-2">
+            <el-icon :size="size" :color="color">
+              <Edit />
+            </el-icon>
+            <span>特殊图像标注</span>
+          </el-menu-item>
+          
+        </el-sub-menu>
       </el-menu>
     </div>
     <!-- 右侧内容 -->
@@ -51,9 +63,8 @@
       <imageCutouDraggablet2 v-if="knowIndex == 1"></imageCutouDraggablet2>
       <imageProcessing v-if="knowIndex == '2-1'"></imageProcessing>
       <imageProcessList v-if="knowIndex == '2-2'"></imageProcessList>
-      <!-- <imageCaptioning v-if="knowIndex == '3'"></imageCaptioning> -->
-      <imageCaptioning2 v-if="knowIndex == '3'"></imageCaptioning2>
-      <!-- <imageCaptioning3 v-if="knowIndex == '3'"></imageCaptioning3> -->
+      <imageCaptioning v-if="knowIndex == '3-1'"></imageCaptioning>
+      <imageCaptioning2 v-if="knowIndex == '3-2'"></imageCaptioning2>
     </div>
   </div>
 </template>
@@ -63,9 +74,9 @@ import { reactive, ref, onMounted } from "vue";
 import imageCutouDraggablet2 from "@/views/pages/imageCutouDraggablet/index.vue";
 import imageProcessing from "@/views/pages/imageProcessing/index.vue";
 import imageProcessList from "@/views/pages/imageProcessList/imageProcessList.vue";
-import imageCaptioning from "@/views/pages/imageCaptioning/index.vue"; //纯前端读取
-import imageCaptioning2 from "@/views/pages/imageCaptioning/imageCaptioning.vue"; // 模拟后端读取（限定第一种格式）
-import imageCaptioning3 from "@/views/pages/imageCaptioning/imageCaptioning2.vue"; //  模拟后端读取（两种格式）
+import imageCaptioning from "@/views/pages/imageCaptioning/imageCaptioning.vue";
+import imageCaptioning2 from "@/views/pages/imageCaptioning/imageCaptioning2.vue";
+import test from "@/views/pages/imageCaptioning/test.vue";
 import { useStore } from "vuex";
 import { getDefaultParams } from "@/api/api";
 

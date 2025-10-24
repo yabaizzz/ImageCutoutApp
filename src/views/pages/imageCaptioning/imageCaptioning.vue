@@ -50,10 +50,21 @@
             class="scan-canvas"
             v-show="showScanEffect"
           ></canvas>
+
+          <!-- 水平扫描线 - 延伸到容器外 -->
           <div
-            class="scan-line"
-            :style="scanLineStyle"
-            v-show="showScanEffect"
+            class="scan-line horizontal-scan-line"
+            :style="horizontalScanLineStyle"
+            v-show="showScanEffect && scanDirection === 'horizontal'"
+            @mousedown="startDrag"
+          ></div>
+
+          <!-- 垂直扫描线 - 延伸到容器外 -->
+          <div
+            class="scan-line vertical-scan-line"
+            :style="verticalScanLineStyle"
+            v-show="showScanEffect && scanDirection === 'vertical'"
+            @mousedown="startDrag"
           ></div>
         </div>
 
@@ -84,9 +95,22 @@
             </label>
           </div>
 
-          <!-- 扫描位置控制（仅在显示扫描效果时显示） -->
+          <!-- 扫描方向选择 -->
           <div class="control-group" v-if="showScanEffect">
-            <label>扫描位置:</label>
+            <label>扫描方向:</label>
+            <select v-model="scanDirection" @change="handleScanDirectionChange">
+              <option value="horizontal">水平扫描</option>
+              <option value="vertical">垂直扫描</option>
+            </select>
+          </div>
+
+          <!-- 扫描位置控制 -->
+          <div class="control-group" v-if="showScanEffect">
+            <label
+              >{{
+                scanDirection === "horizontal" ? "水平位置" : "垂直位置"
+              }}:</label
+            >
             <input
               type="range"
               v-model="scanPosition"
@@ -202,7 +226,17 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import { mockData, colorMap } from "/public/mock2";
+import { fileUpload1 } from "@/api/api";
+
+const colorMap = {
+  0: { name: "城市土地", color: "rgba(0, 255, 255, 0.5)" },
+  1: { name: "农业用地", color: "rgba(255, 255, 0, 0.5)" },
+  2: { name: "牧场", color: "rgba(255, 0, 255, 0.5)" },
+  3: { name: "森林", color: "rgba(0, 255, 0, 0.5)" },
+  4: { name: "水系", color: "rgba(0, 0, 255, 0.5)" },
+  5: { name: "荒地", color: "rgba(255, 255, 255, 0.5)" },
+  6: { name: "未知土地", color: "rgba(0, 0, 0, 0.5)" },
+};
 
 // 响应式数据
 const imageFile = ref(null);
@@ -219,6 +253,8 @@ const isLoading = ref(false);
 const errorMessage = ref("");
 const originalMaskData = ref([]);
 const showScanEffect = ref(false);
+const scanDirection = ref("horizontal");
+const isDragging = ref(false);
 
 // Canvas 引用
 const originalCanvas = ref(null);
@@ -232,7 +268,12 @@ const hasFiles = computed(() => imageFile.value && textFile.value);
 const hasData = computed(
   () => originalImage.value && originalMaskData.value.length > 0
 );
-const scanLineStyle = computed(() => ({ left: `${scanPosition.value}%` }));
+const horizontalScanLineStyle = computed(() => ({
+  left: `${scanPosition.value}%`,
+}));
+const verticalScanLineStyle = computed(() => ({
+  top: `${scanPosition.value}%`,
+}));
 
 // 初始化Canvas
 watch([originalCanvas, maskCanvas, scanCanvas], () => {
@@ -247,6 +288,10 @@ onMounted(() => {
       initializeCanvasContexts();
     }
   }, 300);
+
+  // 添加全局鼠标事件监听
+  document.addEventListener("mousemove", handleDrag);
+  document.addEventListener("mouseup", stopDrag);
 });
 
 const initializeCanvasContexts = () => {
@@ -295,10 +340,61 @@ const handleTextUpload = (event) => {
 const handleScanEffectToggle = () => {
   if (showScanEffect.value) {
     scanPosition.value = 0;
-    updateScanLine();
+    // 切换到扫描模式时，重新渲染掩码以清除基础掩码
+    renderMask();
   } else {
+    // 关闭扫描效果时，清除扫描画布并恢复基础掩码
     clearScanMask();
+    scanPosition.value = 0;
+    scanDirection.value = "horizontal";
+    isDragging.value = false;
+    // 重新渲染基础掩码
+    renderMask();
   }
+};
+
+// 扫描方向改变
+const handleScanDirectionChange = () => {
+  scanPosition.value = 0;
+  updateScanLine();
+};
+
+// 开始拖拽扫描线
+const startDrag = (event) => {
+  isDragging.value = true;
+  event.preventDefault();
+  updateScanPositionFromEvent(event);
+};
+
+// 处理拖拽
+const handleDrag = (event) => {
+  if (!isDragging.value) return;
+  updateScanPositionFromEvent(event);
+};
+
+// 根据鼠标事件更新扫描位置
+const updateScanPositionFromEvent = (event) => {
+  if (!canvasContainer.value) return;
+
+  const containerRect = canvasContainer.value.getBoundingClientRect();
+  let newPosition;
+
+  if (scanDirection.value === "horizontal") {
+    const relativeX = event.clientX - containerRect.left;
+    newPosition = (relativeX / containerRect.width) * 100;
+  } else {
+    const relativeY = event.clientY - containerRect.top;
+    newPosition = (relativeY / containerRect.height) * 100;
+  }
+
+  // 限制在0-100范围内
+  scanPosition.value = Math.max(0, Math.min(100, newPosition));
+  updateScanLine();
+};
+
+// 停止拖拽
+const stopDrag = () => {
+  isDragging.value = false;
 };
 
 // 处理文件核心逻辑
@@ -312,30 +408,16 @@ const processFiles = async () => {
   errorMessage.value = "";
 
   try {
-    // 模拟网络延迟
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // 预留：未来对接后端的文件上传代码
-    // const formData = new FormData();
-    // formData.append("image", imageFile.value);
-    // formData.append("annotationFile", textFile.value);
-    // const response = await fetch("/api/process-annotations", {
-    //   method: "POST",
-    //   body: formData
-    // });
-    // const backendData = await response.json();
-
-    // 使用本地mock数据
-    const backendData = mockData;
+    const res = await fileUpload1(imageFile.value, textFile.value);
 
     // 赋值数据
-    maskData.value = backendData.maskData;
-    originalMaskData.value = [...backendData.maskData];
-    statistics.value = backendData.statistics;
-    imageInfo.value.width = backendData.imageInfo.width;
-    imageInfo.value.height = backendData.imageInfo.height;
-    imageInfo.value.name = backendData.imageInfo.name;
-    imageInfo.value.size = backendData.imageInfo.size;
+    maskData.value = res.data.maskData;
+    originalMaskData.value = [...res.data.maskData];
+    statistics.value = res.data.statistics;
+    imageInfo.value.width = res.data.imageInfo.width;
+    imageInfo.value.height = res.data.imageInfo.height;
+    imageInfo.value.name = res.data.imageInfo.name;
+    imageInfo.value.size = res.data.imageInfo.size;
 
     // 加载图片
     await loadImage();
@@ -402,6 +484,7 @@ const renderMask = () => {
     ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
 
     if (!showScanEffect.value) {
+      // 正常模式：在 maskCanvas 上绘制完整掩码
       maskData.value.forEach((mask) => {
         const color = getCategoryColor(mask.classId);
         if (mask.type === "polygon") {
@@ -414,7 +497,6 @@ const renderMask = () => {
             mask.type
           );
         } else if (mask.type === "boundingBox") {
-          // 关键修改：用 mask.boundingBox 替代 mask.bbox
           drawBoundingBoxMask(ctx, mask.boundingBox, color);
           drawBoundingBox(
             ctx,
@@ -427,10 +509,11 @@ const renderMask = () => {
       });
       maskCanvas.value.style.opacity = maskOpacity.value;
     } else {
-      maskCanvas.value.style.opacity = 0;
-    }
+      // 扫描模式：完全清除基础掩码，只在 scanCanvas 上绘制扫描区域
+      ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
+      maskCanvas.value.style.opacity = 0; // 确保基础掩码完全透明
 
-    if (showScanEffect.value) {
+      // 立即更新扫描效果
       updateScanLine();
     }
   } catch (error) {
@@ -497,6 +580,22 @@ const drawBoundingBox = (ctx, bbox, color, classId, maskType) => {
   ctx.globalAlpha = maskOpacity.value;
 };
 
+// 绘制扫描边界框（不显示标签）
+const drawScanBoundingBox = (ctx, bbox, color) => {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = 1.0;
+
+  const x = bbox.x * canvasWidth.value;
+  const y = bbox.y * canvasHeight.value;
+  const width = bbox.width * canvasWidth.value;
+  const height = bbox.height * canvasHeight.value;
+
+  // 只绘制边界框，不显示标签
+  ctx.strokeRect(x, y, width, height);
+  ctx.globalAlpha = maskOpacity.value;
+};
+
 // 绘制类别标签
 const drawClassIdLabel = (ctx, x, y, width, height, classId, color) => {
   const label = classId.toString();
@@ -524,39 +623,56 @@ const updateScanLine = () => {
   updateScanMask();
 };
 
-// 更新扫描掩码
+// 更新扫描掩码 - 重新设计支持水平和垂直扫描
 const updateScanMask = () => {
   try {
     const ctx = getSafeCanvasContext(scanCanvas.value, "Scan");
+    // 完全清除扫描画布
     ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
 
     if (showScanEffect.value) {
-      const scanX = (scanPosition.value / 100) * canvasWidth.value;
-
       ctx.save();
-      // 关键修改：剪辑区域改为扫描线左侧（已扫描部分）
-      ctx.beginPath();
-      ctx.rect(0, 0, scanX, canvasHeight.value);
-      ctx.clip();
 
-      // 在已扫描区域绘制掩码
+      // 根据扫描方向设置剪辑区域
+      if (scanDirection.value === "horizontal") {
+        // 水平扫描：扫描线左侧区域
+        const scanX = (scanPosition.value / 100) * canvasWidth.value;
+        ctx.beginPath();
+        ctx.rect(0, 0, scanX, canvasHeight.value);
+        ctx.clip();
+      } else {
+        // 垂直扫描：扫描线上方区域
+        const scanY = (scanPosition.value / 100) * canvasHeight.value;
+        ctx.beginPath();
+        ctx.rect(0, 0, canvasWidth.value, scanY);
+        ctx.clip();
+      }
+
+      // 在已扫描区域绘制掩码和边界框
       maskData.value.forEach((mask) => {
         const color = getCategoryColor(mask.classId);
+
         if (mask.type === "polygon") {
           drawPolygonScanMask(ctx, mask.points, color);
+          // 扫描时显示多边形边界框
+          drawScanBoundingBox(ctx, mask.boundingBox, color);
         } else if (mask.type === "boundingBox") {
           drawBoundingBoxScanMask(ctx, mask.boundingBox, color);
+          // 扫描时显示边界框类型的边界框
+          drawScanBoundingBox(ctx, mask.boundingBox, color);
         }
       });
 
       ctx.restore();
-      // 隐藏基础掩码，只显示扫描区域内的掩码
+
+      // 确保基础掩码完全隐藏
       maskCanvas.value.style.opacity = 0;
     }
   } catch (error) {
     console.error("更新扫描遮罩失败:", error);
   }
 };
+
 // 绘制多边形扫描掩码
 const drawPolygonScanMask = (ctx, points, color) => {
   if (!points || points.length < 3) return;
@@ -661,7 +777,6 @@ const formatFileSize = (bytes) => {
 </script>
 
 <style lang="scss" scoped>
-// 样式保持不变...
 .app-container {
   display: flex;
   flex-direction: column;
@@ -758,7 +873,7 @@ const formatFileSize = (bytes) => {
         border-radius: 4px;
         background-color: #f0f0f0;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        overflow: hidden;
+        overflow: visible; /* 改为visible以显示延伸的扫描线 */
         max-width: 800px;
         max-height: 600px;
         min-height: 400px;
@@ -775,13 +890,25 @@ const formatFileSize = (bytes) => {
 
         .scan-line {
           position: absolute;
-          top: 0;
-          width: 2px;
-          height: 100%;
-          background: red;
-          pointer-events: none;
           z-index: 10;
           box-shadow: 0 0 5px rgba(255, 0, 0, 0.7);
+          cursor: pointer;
+
+          &.horizontal-scan-line {
+            top: -10px; /* 延伸到容器上方 */
+            width: 4px;
+            height: calc(100% + 20px); /* 延伸到容器上下 */
+            background: red;
+            cursor: ew-resize; /* 水平拖拽光标 */
+          }
+
+          &.vertical-scan-line {
+            left: -10px; /* 延伸到容器左侧 */
+            width: calc(100% + 20px); /* 延伸到容器左右 */
+            height: 4px;
+            background: red;
+            cursor: ns-resize; /* 垂直拖拽光标 */
+          }
         }
       }
 
@@ -802,6 +929,12 @@ const formatFileSize = (bytes) => {
           label {
             font-weight: 500;
             min-width: 80px;
+          }
+
+          select {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
           }
 
           &.checkbox-label {

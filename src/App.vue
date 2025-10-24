@@ -31,39 +31,65 @@
 
 <script setup>
 import CustomTitleBar from "@/components/CustomTitleBar/index.vue";
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 
-let ipcRenderer = null;
-if (window && window.process && window.process.type) {
-  ipcRenderer = window.require("electron").ipcRenderer;
-}
-
+// 响应式数据
 const showUpdateDialog = ref(false);
 const downloading = ref(false);
 const progressPercent = ref(0);
 const progressText = ref("");
 const updateDownloaded = ref(false);
 
-if (ipcRenderer) {
-  ipcRenderer.on("update-available", () => {
-    showUpdateDialog.value = true;
-    downloading.value = true;
-  });
+// 初始化更新监听
+onMounted(() => {
+  // 确保在上下文隔离模式下通过preload暴露的API访问
+  if (window.electronAPI) {
+    // 监听更新可用事件
+    window.electronAPI.onUpdateAvailable(() => {
+      showUpdateDialog.value = true;
+      downloading.value = true;
+    });
 
-  ipcRenderer.on("download-progress", (event, progress) => {
-    progressPercent.value = Math.floor(progress.percent);
-    progressText.value = `已下载 ${progress.transferred}/${progress.total} 字节`;
-  });
+    // 监听下载进度事件
+    window.electronAPI.onDownloadProgress((progress) => {
+      progressPercent.value = Math.floor(progress.percent);
+      progressText.value = `已下载 ${formatBytes(
+        progress.transferred
+      )}/${formatBytes(progress.total)}`;
+    });
 
-  ipcRenderer.on("update-downloaded", () => {
-    downloading.value = false;
-    updateDownloaded.value = true;
-    progressText.value = "下载完成，点击重启安装";
-  });
-}
+    // 监听更新下载完成事件
+    window.electronAPI.onUpdateDownloaded(() => {
+      downloading.value = false;
+      updateDownloaded.value = true;
+      progressText.value = "下载完成，点击重启安装";
+    });
 
+    // 监听更新错误事件
+    window.electronAPI.onUpdateError((error) => {
+      console.error("更新失败:", error);
+      showUpdateDialog.value = false;
+      // 可根据需要添加错误提示
+      ElMessage.error(`更新失败${error}`);
+    });
+  } else {
+    console.warn("electronAPI未找到，可能是preload配置问题");
+  }
+});
+
+// 格式化字节数显示
+const formatBytes = (bytes, decimals = 2) => {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+};
+
+// 触发安装更新
 const installUpdate = () => {
-  ipcRenderer?.send("install-update");
+  window.electronAPI?.installUpdate();
 };
 </script>
 

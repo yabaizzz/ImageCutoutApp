@@ -50,16 +50,13 @@
           </div>
           <div class="result-item">
             <p>处理后图</p>
-            <!-- <img v-if="resultUrl" :src="store.state.baseUrl + resultUrl" /> -->
             <el-image
               v-if="resultUrl"
-              :src="store.state.baseUrl + resultUrl"
+              :src="resultUrl"
               :zoom-rate="1.2"
               :max-scale="7"
               :min-scale="0.2"
-              :preview-src-list="[store.state.baseUrl + resultUrl]"
-              show-progress
-              :initial-index="4"
+              :preview-src-list="[resultUrl]"
               fit="cover"
             />
             <div v-else class="placeholder">未生成结果</div>
@@ -117,7 +114,7 @@ const originalImage = ref(null); // 原图数据(包含id)
 
 // 算法处理后图
 const resultImage = ref(null); //处理后图片数据
-const resultUrl = ref(""); //处理后图片路径
+const resultUrl = ref(null); //处理后图片路径
 
 // 监听弹窗状态变化
 watch(
@@ -180,17 +177,21 @@ function saveParams(params) {
 }
 // 算法请求-处理图片
 function applyAlgorithms(params) {
+  console.log("params", {
+    process_type: currentParams.value.process_type,
+    parameters: { ...params },
+  });
   const image_id = originalImage.value.image_id;
   getProcess(image_id, {
     process_type: currentParams.value.process_type,
     parameters: JSON.stringify({
-      ...params,
+      ...params.formData,
     }),
   }).then((res) => {
     if (res.data.message == "图像处理成功") {
       ElMessage.success("图像处理成功");
       resultImage.value = res.data.parameters;
-      resultUrl.value = res.data.result_url;
+      resultUrl.value = store.state.baseUrl + res.data.result_url;
       loading.value = false;
     }
   });

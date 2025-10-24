@@ -6,11 +6,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowMaximize: () => ipcRenderer.send("window-maximize"),
   windowClose: () => ipcRenderer.send("window-close"),
 
-  //菜单
+  // 菜单
   windowToggleDevTools: () => ipcRenderer.send("window-toggle-devtools"),
   appQuit: () => ipcRenderer.send("app-quit"),
 
-  // 自动更新
+  // 自动更新 - 新增检查更新方法
+  checkForUpdates: () => ipcRenderer.send("check-for-updates"),
   installUpdate: () => ipcRenderer.send("install-update"),
   onUpdateAvailable: (callback) => ipcRenderer.on("update-available", callback),
   onDownloadProgress: (callback) =>
@@ -19,6 +20,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ),
   onUpdateDownloaded: (callback) =>
     ipcRenderer.on("update-downloaded", callback),
+  onUpdateError: (
+    // 新增：暴露更新错误监听
+    callback
+  ) => ipcRenderer.on("update-error", (event, error) => callback(error)),
+
   // 保存图片
   saveImage: (buffer, filename) =>
     ipcRenderer.invoke("save-image", buffer, filename),

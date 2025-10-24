@@ -13,7 +13,10 @@
         </div>
       </div>
 
-      <!-- 新增图标 -->
+      <!-- 新增：检查更新按钮 -->
+      <button @click="checkForUpdates" class="update-btn">⟳</button>
+
+      <!-- 原有设置按钮 -->
       <button @click="openCustomPopup">⚙️</button>
 
       <!-- 系统按钮 -->
@@ -25,7 +28,7 @@
     <!-- 弹窗 -->
     <div v-if="showPopup" class="popup">
       <h3>自定义弹窗</h3>
-      <p>这里放内容</p>
+      <p>版本1.0.1</p>
       <button @click="showPopup = false">关闭</button>
     </div>
   </div>
@@ -33,6 +36,7 @@
 
 <script setup>
 import { ref } from "vue";
+import { ElMessage } from "element-plus"; // 引入消息提示组件
 
 defineProps({
   title: { type: String, default: "我的应用" },
@@ -50,6 +54,19 @@ const isDev = process.env.NODE_ENV === "development";
 const showMenu = ref(false);
 function toggleMenu() {
   showMenu.value = !showMenu.value;
+}
+
+// 新增：检查更新方法
+function checkForUpdates() {
+  // 开发环境提示
+  if (isDev) {
+    ElMessage.info("开发环境不支持自动更新");
+    return;
+  }
+
+  // 生产环境发送检查更新请求到主进程
+  ElMessage.info("正在检查更新...");
+  window.electronAPI?.checkForUpdates();
 }
 
 // 系统按钮
@@ -104,6 +121,21 @@ function quitApp() {
       border: none;
       color: #fff;
       cursor: pointer;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+    }
+
+    // 新增：更新按钮样式
+    .update-btn {
+      font-size: 16px;
     }
 
     .dev-menu {

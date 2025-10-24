@@ -2,7 +2,8 @@ import { createStore } from "vuex";
 
 export default createStore({
   state: {
-    baseUrl: "http://101.132.72.84:8000",
+    baseUrl: "http://192.168.1.2:8000",
+    // baseUrl: "http://101.132.72.84:8000",
     algorithms: null, //算法列表
     defaultParams: null, //算法总参数
   },

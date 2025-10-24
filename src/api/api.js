@@ -46,3 +46,24 @@ export const editTaskImageTitle = (data) =>
 // 删除任务图像
 export const deleteTaskImage = (task_id) =>
   request.delete(`/api/task/${task_id}/delete`);
+
+// 普通图像标记
+export const fileUpload1 = (image, txt) => {
+  const formData = new FormData();
+  formData.append("image", image);
+  formData.append("annotation", txt);
+
+  return request.post("/api/annotation", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+// 特殊图像标记
+export const fileUpload2 = (file) => {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  return request.post("/api/annotation2", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};

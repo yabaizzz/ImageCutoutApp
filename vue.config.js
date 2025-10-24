@@ -12,6 +12,7 @@ module.exports = defineConfig({
   transpileDependencies: true,
   publicPath: "./", // 相对路径
   devServer: {
+    host: "0.0.0.0", // 允许外部设备访问
     port: 8080,
   },
 });

@@ -15,14 +15,9 @@ npm run serve
 npm run build
 ```
 
-### 打包electron版客户端（直接生成文件夹）
+### 打包electron版客户端（生成安装包），并自动上传更新文件到github实现自动更新。
 ```
-npm run build:electron
-```
-
-### 打包electron版客户端（生成安装包）
-```
-npm run electron:build -- --win --x64 --ia32
+npm run dist
 ```
 
 ### Customize configuration
