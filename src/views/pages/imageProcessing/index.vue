@@ -260,30 +260,46 @@ function applyAlgorithms(params) {
 
   .result-card {
     flex: 1;
-    .result-view {
-      display: flex;
-      flex-direction: column; /* 上下布局 */
-      justify-content: space-between;
-      gap: 20px;
+    height: 100%;
+    :deep(.el-card__body) {
       height: 100%;
-      .result-item {
-        flex: 1;
-        text-align: center;
-        background: #f6f6f6;
-        border-radius: 8px;
-        padding: 10px;
-        p {
-          color: #555;
-          margin-bottom: 5px;
-        }
-        img {
-          max-width: 90%;
-          max-height: 250px;
+      overflow-y: auto;
+
+      .result-view {
+        display: flex;
+        flex-direction: column; /* 上下布局 */
+        justify-content: space-between;
+        gap: 20px;
+        height: 100%;
+        .result-item {
+          flex: 1;
+          text-align: center;
+          background: #f6f6f6;
           border-radius: 8px;
-        }
-        .placeholder {
-          color: #999;
-          margin-top: 40px;
+          padding: 10px;
+          box-sizing: border-box;
+          &:first-child {
+            flex: 0.7;
+          }
+          &:last-child {
+            img {
+              max-width: 500px;
+              max-height: 500px;
+            }
+          }
+          p {
+            color: #555;
+            margin-bottom: 5px;
+          }
+          img {
+            max-width: 90%;
+            max-height: 250px;
+            border-radius: 8px;
+          }
+          .placeholder {
+            color: #999;
+            margin-top: 40px;
+          }
         }
       }
     }
