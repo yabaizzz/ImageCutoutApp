@@ -15,8 +15,6 @@ const visible = ref(false);
 const layerStore = useLayerStore();
 
 function open() {
-  console.log("222");
-
   visible.value = true;
 }
 function close() {

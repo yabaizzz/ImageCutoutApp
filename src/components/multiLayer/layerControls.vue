@@ -39,8 +39,6 @@
 
     <div class="buttons">
       <el-button @click="resetView">重置视图</el-button>
-      <el-button @click="openPreprocess">图像预处理</el-button>
-      <el-button type="danger" @click="undoLast">撤销预处理</el-button>
     </div>
   </el-card>
 </template>
@@ -48,10 +46,8 @@
 <script setup>
 import { ref } from "vue";
 import { useLayerStore } from "@/store";
-import { getCurrentInstance } from "vue";
-
+import { ElMessage } from "element-plus";
 const layerStore = useLayerStore();
-const { proxy } = getCurrentInstance();
 
 // 用户输入的比例
 const scaleInput = ref("");
@@ -66,13 +62,13 @@ const handleScaleInput = () => {
   // 匹配 1:数字 或 1/数字
   const match = input.match(/^1[:/](\d+(\.\d+)?)$/);
   if (!match) {
-    proxy.$message.error("请输入正确格式，例如 1:200");
+    ElMessage.error("请输入正确格式，例如 1:200");
     return;
   }
 
   const denominator = parseFloat(match[1]);
   if (denominator <= 0) {
-    proxy.$message.error("比例必须大于0");
+    ElMessage.error("比例必须大于0");
     return;
   }
 
@@ -81,23 +77,13 @@ const handleScaleInput = () => {
 
   // 限制范围
   layerStore.containerScale = Math.min(Math.max(newScale, 0.1), 5);
-  proxy.$message.success(`已应用比例 1:${denominator}`);
+  ElMessage.success(`已应用比例 1:${denominator}`);
 };
 
 const resetView = () => {
   layerStore.containerScale = 1;
   layerStore.compareSplit = 0.5;
   scaleInput.value = "";
-};
-
-const openPreprocess = () => {
-  proxy.$refs.preprocessRef?.open();
-};
-
-const undoLast = () => {
-  if (layerStore.activeLayerId) {
-    layerStore.undoLastOperation(layerStore.activeLayerId);
-  }
 };
 </script>
 
