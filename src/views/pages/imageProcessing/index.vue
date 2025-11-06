@@ -88,11 +88,11 @@ import { ref, reactive, computed, onMounted, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { fileUpload, getDefaultParams, getProcess } from "@/api/api";
 import AlgorithmParamDialog from "./algorithmParamDialog.vue";
-import { useStore } from "vuex";
-const store = useStore();
+import { useCommonStore } from "@/store";
+const store = useCommonStore();
 
 // ====== 默认参数 ======
-const defaultParams = ref({ ...store.state.defaultParams }); //算法参数总数据
+const defaultParams = ref({ ...store?.defaultParams }); //算法参数总数据
 const dialogVisible = ref(false); //弹窗是否打开
 const loading = ref(false); //处理状态
 
@@ -103,7 +103,7 @@ const rootStyle = computed(() => ({
 }));
 
 // ====== 算法选择 ======
-const algorithms = ref([...store.state.algorithms]); //算法列表
+const algorithms = ref([...store?.algorithms]); //算法列表
 const selectedAlgos = ref(null); //当前选择的算法
 const currentParams = ref(null); //当前选择的算法的参数
 
@@ -158,7 +158,7 @@ function radiochange(value) {
 // 保存结果——下载图片到本地
 async function saveResult() {
   const result = await window.electronAPI.saveImage(
-    store.state.baseUrl + resultUrl.value,
+    store.baseUrl + resultUrl.value,
     "processed.png"
   );
 
@@ -191,7 +191,7 @@ function applyAlgorithms(params) {
     if (res.data.message == "图像处理成功") {
       ElMessage.success("图像处理成功");
       resultImage.value = res.data.parameters;
-      resultUrl.value = store.state.baseUrl + res.data.result_url;
+      resultUrl.value = store.baseUrl + res.data.result_url;
       loading.value = false;
     }
   });

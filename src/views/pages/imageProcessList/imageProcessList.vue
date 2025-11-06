@@ -111,7 +111,6 @@
 import { ref, reactive, onMounted, toRaw } from "vue";
 import { ElMessage } from "element-plus";
 import { Edit, Check, Close } from "@element-plus/icons-vue";
-import { useStore } from "vuex";
 import moment from "moment";
 import {
   getImageHistory,
@@ -121,8 +120,8 @@ import {
   editTaskImageTitle,
   deleteTaskImage,
 } from "@/api/api";
-
-const store = useStore();
+import { useCommonStore } from "@/store";
+const store = useCommonStore();
 
 // 示例数据
 const history = ref([]);
@@ -154,7 +153,7 @@ function onExpandChange(row, expandedRows) {
             x.process_time = moment(x.process_time).format(
               "YYYY-MM-DD HH:mm:ss"
             );
-            x.process_type = store.state.algorithms.find(
+            x.process_type = store.algorithms.find(
               (y) => y.value == x.process_type
             ).label;
           });

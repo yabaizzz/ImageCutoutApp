@@ -3,11 +3,11 @@ import axios, {
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from "axios";
-import store from "@/store";
-
+import { useCommonStore } from "@/store";
+const commonStore = useCommonStore();
 import { ElMessage } from "element-plus";
 const request = axios.create({
-  baseURL: store.state.baseUrl,
+  baseURL: commonStore.baseUrl,
   timeout: 1000 * 60,
   headers: {
     "Content-Type": "application/json",

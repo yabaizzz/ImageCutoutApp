@@ -54,33 +54,39 @@
             </el-icon>
             <span>特殊图像标注</span>
           </el-menu-item>
-          
         </el-sub-menu>
+        <el-menu-item index="4">
+          <el-icon :size="size" :color="color">
+            <Edit />
+          </el-icon>
+          <span>多图层叠加</span>
+        </el-menu-item>
       </el-menu>
     </div>
     <!-- 右侧内容 -->
     <div class="right">
-      <imageCutouDraggablet2 v-if="knowIndex == 1"></imageCutouDraggablet2>
+      <imageCutouDraggablet2 v-if="knowIndex == '1'"></imageCutouDraggablet2>
       <imageProcessing v-if="knowIndex == '2-1'"></imageProcessing>
       <imageProcessList v-if="knowIndex == '2-2'"></imageProcessList>
       <imageCaptioning v-if="knowIndex == '3-1'"></imageCaptioning>
       <imageCaptioning2 v-if="knowIndex == '3-2'"></imageCaptioning2>
+      <layerOverlay v-if="knowIndex == '4'"></layerOverlay>
     </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from "vue";
+import { reactive, ref, onMounted, toRef } from "vue";
 import imageCutouDraggablet2 from "@/views/pages/imageCutouDraggablet/index.vue";
 import imageProcessing from "@/views/pages/imageProcessing/index.vue";
 import imageProcessList from "@/views/pages/imageProcessList/imageProcessList.vue";
 import imageCaptioning from "@/views/pages/imageCaptioning/imageCaptioning.vue";
 import imageCaptioning2 from "@/views/pages/imageCaptioning/imageCaptioning2.vue";
-import test from "@/views/pages/imageCaptioning/test.vue";
-import { useStore } from "vuex";
+import layerOverlay from "@/views/pages/layer/index.vue";
+import { useCommonStore } from "@/store";
 import { getDefaultParams } from "@/api/api";
 
-const store = useStore();
+const commonStore = useCommonStore();
 
 // 左侧菜单，当前选中的下标
 const knowIndex = ref(1);
@@ -105,8 +111,8 @@ onMounted(() => {
     // 按照字符长度从小到大排序
     algorithms = algorithms.sort((a, b) => a.label.length - b.label.length);
     defaultParams = res.data;
-    store.commit("updataAlgorithms", algorithms);
-    store.commit("updataDefaultParams", defaultParams);
+    commonStore.updataAlgorithms(algorithms);
+    commonStore.updataDefaultParams(defaultParams);
   });
 });
 </script>
@@ -117,7 +123,7 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   .left {
-    width: 220px;
+    width: 160px;
     height: 100%;
     .el-menu-vertical-demo {
       width: 100%;
@@ -125,7 +131,7 @@ onMounted(() => {
     }
   }
   .right {
-    width: calc(100% - 220px);
+    width: calc(100% - 160px);
     height: 100%;
     overflow-y: auto;
   }

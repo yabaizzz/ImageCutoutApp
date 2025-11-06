@@ -1,21 +1,11 @@
-import { createStore } from "vuex";
+import { createPinia } from "pinia";
 
-export default createStore({
-  state: {
-    baseUrl: "http://192.168.1.2:8000",
-    // baseUrl: "http://101.132.72.84:8000",
-    algorithms: null, //算法列表
-    defaultParams: null, //算法总参数
-  },
-  getters: {},
-  mutations: {
-    updataAlgorithms(state, data) {
-      state.algorithms = data;
-    },
-    updataDefaultParams(state, data) {
-      state.defaultParams = data;
-    },
-  },
-  actions: {},
-  modules: {},
-});
+import { useCommonStore } from "./modules/common"; //通用
+import { useLayerStore } from "./modules/layer"; // 多图层
+
+const pinia = createPinia();
+
+// 导出实例供全局使用
+export default pinia;
+
+export { useCommonStore, useLayerStore };
