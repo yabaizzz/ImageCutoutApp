@@ -162,11 +162,12 @@ onMounted(() => {
   height: 100%;
   overflow: hidden;
   background-color: #f5f7fa;
-  .main-content {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-    height: calc(100% - 100px);
-  }
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: calc(100% - 100px);
 }
 </style>

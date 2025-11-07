@@ -17,7 +17,7 @@
             :key="layer.id"
             class="layer"
             :style="getLayerStyle(layer, index)"
-            v-show="layer.visible && (!swipeMode || index === 0)"
+            v-show="layer.visible && !swipeMode"
           >
             <img
               :src="layer.src"
@@ -28,12 +28,12 @@
           </div>
 
           <!-- 卷帘模式下的图层 -->
-          <div v-if="swipeMode && layers.length >= 2" class="swipe-layers">
+          <div v-if="swipeMode && layers.length >= 2" class="swipe-container">
             <!-- 左侧图层 (第一个图层) -->
             <div
               class="swipe-layer left-layer"
               :style="{
-                clipPath: `inset(0 ${containerWidth - swipePosition}px 0 0)`,
+                width: `${swipePosition}px`,
                 display: layers[0].visible ? 'block' : 'none',
               }"
             >
@@ -45,11 +45,21 @@
               />
             </div>
 
+            <!-- 卷帘分割线 -->
+            <div
+              class="swipe-divider"
+              :style="{ left: `${swipePosition}px` }"
+              @mousedown="startSwipe"
+            >
+              <div class="divider-handle"></div>
+            </div>
+
             <!-- 右侧图层 (第二个图层) -->
             <div
               class="swipe-layer right-layer"
               :style="{
-                clipPath: `inset(0 0 0 ${swipePosition}px)`,
+                left: `${swipePosition}px`,
+                width: `${containerWidth - swipePosition}px`,
                 display: layers[1].visible ? 'block' : 'none',
               }"
             >
@@ -59,15 +69,6 @@
                 :width="layers[1].width"
                 :height="layers[1].height"
               />
-            </div>
-
-            <!-- 卷帘分割线 - 修复位置同步问题 -->
-            <div
-              class="swipe-divider"
-              :style="{ left: swipePosition - containerScrollLeft + 'px' }"
-              @mousedown="startSwipe"
-            >
-              <div class="divider-handle"></div>
             </div>
           </div>
         </div>
@@ -85,13 +86,14 @@ import {
   onUnmounted,
   watch,
   computed,
+  nextTick,
 } from "vue";
 
 // 组件状态
 const viewerContainer = ref(null);
 const layersContainer = ref(null);
 const containerWidth = ref(0);
-const containerScrollLeft = ref(0);
+const containerHeight = ref(0);
 
 // 工具状态
 const isDragging = ref(false);
@@ -148,32 +150,26 @@ const getLayerStyle = (layer, index) => {
 onMounted(() => {
   updateContainerSize();
   window.addEventListener("resize", updateContainerSize);
-
-  // 监听容器滚动
-  if (viewerContainer.value) {
-    viewerContainer.value.addEventListener("scroll", handleScroll);
-  }
 });
 
 onUnmounted(() => {
   window.removeEventListener("resize", updateContainerSize);
-
-  if (viewerContainer.value) {
-    viewerContainer.value.removeEventListener("scroll", handleScroll);
-  }
 });
 
 // 更新容器尺寸
 const updateContainerSize = () => {
   if (viewerContainer.value) {
     containerWidth.value = viewerContainer.value.clientWidth;
-  }
-};
+    containerHeight.value = viewerContainer.value.clientHeight;
 
-// 处理滚动事件
-const handleScroll = () => {
-  if (viewerContainer.value) {
-    containerScrollLeft.value = viewerContainer.value.scrollLeft;
+    // 如果卷帘模式启用且swipePosition为0，设置默认位置
+    if (
+      props.swipeMode &&
+      props.swipePosition === 0 &&
+      containerWidth.value > 0
+    ) {
+      emit("set-swipe-position", containerWidth.value / 2);
+    }
   }
 };
 
@@ -182,8 +178,29 @@ watch(
   () => props.swipeMode,
   (newVal) => {
     if (newVal) {
-      // 启用卷帘时设置默认位置
-      setTimeout(updateContainerSize, 100);
+      // 启用卷帘时重置视图和卷帘位置
+      nextTick(() => {
+        updateContainerSize();
+        if (containerWidth.value > 0) {
+          emit("set-swipe-position", containerWidth.value / 2);
+        }
+      });
+    }
+  }
+);
+
+// 监听容器尺寸变化
+watch(
+  () => [containerWidth.value, containerHeight.value],
+  () => {
+    if (props.swipeMode && containerWidth.value > 0) {
+      // 确保卷帘位置在容器范围内
+      const currentPosition = props.swipePosition;
+      const maxPosition = containerWidth.value;
+
+      if (currentPosition > maxPosition) {
+        emit("set-swipe-position", maxPosition / 2);
+      }
     }
   }
 );
@@ -282,7 +299,7 @@ const stopSwipe = () => {
   document.removeEventListener("mouseup", stopSwipe);
 };
 
-// 卷帘位置更新 - 修复滚动偏移
+// 卷帘位置更新 - 基于容器尺寸
 const updateSwipePosition = (e) => {
   const container = viewerContainer.value;
   if (!container) return;
@@ -290,8 +307,8 @@ const updateSwipePosition = (e) => {
   const rect = container.getBoundingClientRect();
   const containerLeft = rect.left;
 
-  // 计算鼠标在容器内的位置（考虑滚动）
-  let position = e.clientX - containerLeft + containerScrollLeft.value;
+  // 计算鼠标在容器内的位置
+  let position = e.clientX - containerLeft;
 
   // 限制在容器范围内
   position = Math.max(10, Math.min(position, containerWidth.value - 10));
@@ -341,33 +358,38 @@ const updateSwipePosition = (e) => {
     }
   }
 
-  .swipe-layers {
+  .swipe-container {
     position: relative;
     width: 100%;
     height: 100%;
+    overflow: hidden;
 
     .swipe-layer {
       position: absolute;
       top: 0;
-      left: 0;
+      height: 100%;
+      overflow: hidden;
+
+      &.left-layer {
+        left: 0;
+      }
+
+      &.right-layer {
+        left: 0;
+      }
 
       img {
         display: block;
         user-select: none;
         -webkit-user-drag: none;
-      }
-
-      &.left-layer {
-        z-index: 1;
-      }
-
-      &.right-layer {
-        z-index: 2;
+        height: 100%;
+        width: auto;
+        max-width: none;
       }
     }
 
     .swipe-divider {
-      position: absolute; /* 使用绝对定位，相对于图像容器 */
+      position: absolute;
       top: 0;
       height: 100%;
       width: 3px;

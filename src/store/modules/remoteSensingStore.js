@@ -7,7 +7,7 @@ export const useLayerStore = defineStore("remoteSensing", {
     activeTabId: null,
     activeLayerId: null,
     swipeMode: true, // 默认启用卷帘对比
-    swipePosition: 200,
+    swipePosition: 0, // 初始为0，在组件中动态计算
   }),
 
   getters: {
@@ -180,7 +180,8 @@ export const useLayerStore = defineStore("remoteSensing", {
     // 卷帘功能
     toggleSwipeMode() {
       this.swipeMode = !this.swipeMode;
-      if (!this.swipeMode) {
+      if (this.swipeMode) {
+        // 启用卷帘时重置卷帘位置
         this.swipePosition = 0;
       }
       return this.swipeMode;
