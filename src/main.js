@@ -7,6 +7,13 @@ import "element-plus/dist/index.css";
 import * as ElementPlusIconsVue from "@element-plus/icons-vue";
 
 import "@/font/font.css";
+
+const observer = new ResizeObserver((entries) => {
+  entries.forEach(() => {
+    // 空实现，忽略错误
+  });
+});
+observer.observe(document.body);
 const app = createApp(App);
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component);

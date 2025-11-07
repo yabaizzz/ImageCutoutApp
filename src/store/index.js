@@ -1,7 +1,7 @@
 import { createPinia } from "pinia";
 
 import { useCommonStore } from "./modules/common"; //通用
-import { useLayerStore } from "./modules/layer"; // 多图层
+import { useLayerStore } from "./modules/remoteSensingStore"; // 多图层
 
 const pinia = createPinia();
 
