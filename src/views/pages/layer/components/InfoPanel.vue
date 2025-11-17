@@ -1,3 +1,7 @@
+<!-- 
+  罗佳琪 2025年11月17日09:15:20
+  描述：图层信息面板
+-->
 <template>
   <div class="info-panel">
     <el-card>
@@ -49,8 +53,6 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from "vue";
-
 const props = defineProps({
   currentLayer: {
     type: Object,

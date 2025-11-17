@@ -38,7 +38,7 @@
 import { ref } from "vue";
 import { ElMessage } from "element-plus"; // 引入消息提示组件
 
-defineProps({
+const props = defineProps({
   title: { type: String, default: "我的应用" },
 });
 

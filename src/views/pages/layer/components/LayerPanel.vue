@@ -1,3 +1,7 @@
+<!-- 
+  罗佳琪 2025年11月17日09:15:20
+  描述：图层管理面板
+-->
 <template>
   <div class="layer-panel">
     <el-card>
@@ -30,7 +34,7 @@
                 <el-icon @click.stop="handleDuplicateLayer(layer.id)">
                   <CopyDocument />
                 </el-icon>
-                <el-icon @click.stop="handleOpenSettings(layer.id)">
+                <el-icon @click.stop="handleOpenSettings(layer.imageId)">
                   <Setting />
                 </el-icon>
                 <el-icon @click.stop="handleRemoveLayer(layer.id)">
@@ -50,7 +54,7 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, ref, watch } from "vue";
+import { ref, toRef, watch } from "vue";
 import { CopyDocument, Setting, Delete } from "@element-plus/icons-vue";
 import draggable from "vuedraggable";
 
@@ -106,7 +110,7 @@ const handleRemoveLayer = (layerId) => {
   emit("remove-layer", layerId);
 };
 
-const handleOpenSettings = (layerId) => {
+const handleOpenSettings = (layerId, layer) => {
   emit("open-settings", layerId);
 };
 </script>

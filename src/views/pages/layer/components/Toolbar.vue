@@ -34,15 +34,21 @@
       <el-button size="small" @click="handleZoomOut">
         <el-icon><ZoomOut /></el-icon> 缩小
       </el-button>
+
+      <!-- 修改为支持自定义比例输入 -->
       <el-input
-        v-model.number="zoomInput"
+        v-model="zoomInput"
         size="small"
-        style="width: 80px; margin: 0 5px"
+        style="width: 100px; margin: 0 5px"
+        placeholder="如: 1:1"
         @change="handleZoomChange"
+        @blur="handleZoomBlur"
       />
+
       <el-button size="small" @click="handleZoomIn">
         <el-icon><ZoomIn /></el-icon> 放大
       </el-button>
+
       <el-button size="small" @click="handleResetView">
         <el-icon><Refresh /></el-icon> 重置视图
       </el-button>
@@ -51,6 +57,7 @@
         size="small"
         :type="swipeMode ? 'primary' : ''"
         @click="handleToggleSwipe"
+        :disabled="!canEnableSwipe"
       >
         {{ swipeMode ? "退出卷帘" : "启用卷帘" }}
       </el-button>
@@ -59,7 +66,9 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
+import { fileUpload } from "@/api/api";
+import { useCommonStore } from "@/store";
 import {
   Upload,
   ZoomIn,
@@ -67,12 +76,14 @@ import {
   Refresh,
   Plus,
 } from "@element-plus/icons-vue";
+import { ElMessage } from "element-plus";
+const store = useCommonStore();
 
 const props = defineProps({
   tabs: { type: Array, default: () => [] },
   activeTabId: { type: String, default: "" },
   swipeMode: { type: Boolean, default: false },
-  currentZoom: { type: Number, default: 100 },
+  currentZoom: { type: Number, default: 1 },
 });
 
 const emit = defineEmits([
@@ -87,14 +98,106 @@ const emit = defineEmits([
   "upload-image",
 ]);
 
-const zoomInput = ref(props.currentZoom);
+const zoomInput = ref("1:1");
 
-// 监听当前缩放变化
+// 计算是否可以启用卷帘模式
+const canEnableSwipe = computed(() => {
+  const visibleLayers =
+    props.tabs
+      .find((tab) => tab.id === props.activeTabId)
+      ?.layers?.filter((layer) => layer.visible) || [];
+  return visibleLayers.length >= 2;
+});
+
+// 将zoom值转换为比例字符串
+const zoomToRatioString = (zoom) => {
+  if (zoom === 1) return "1:1";
+
+  // 如果zoom是整数，直接显示
+  if (Number.isInteger(zoom)) {
+    return `${zoom}:1`;
+  }
+
+  // 如果是小数，转换为分数形式
+  // 常见的比例转换
+  const commonRatios = {
+    0.1: "1:10",
+    0.2: "1:5",
+    0.25: "1:4",
+    0.5: "1:2",
+    0.75: "3:4",
+    1.25: "5:4",
+    1.5: "3:2",
+    2: "2:1",
+    2.5: "5:2",
+    3: "3:1",
+    4: "4:1",
+    5: "5:1",
+  };
+
+  // 查找最接近的常见比例
+  let closestRatio = "1:1";
+  let minDiff = Infinity;
+
+  for (const [zoomValue, ratio] of Object.entries(commonRatios)) {
+    const diff = Math.abs(zoom - parseFloat(zoomValue));
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestRatio = ratio;
+    }
+  }
+
+  // 如果差异很小，使用常见比例，否则精确显示
+  if (minDiff < 0.01) {
+    return closestRatio;
+  }
+
+  // 精确显示为分数
+  const numerator = Math.round(zoom * 100);
+  const denominator = 100;
+
+  // 简化分数
+  const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+  const divisor = gcd(numerator, denominator);
+
+  return `${numerator / divisor}:${denominator / divisor}`;
+};
+
+// 解析比例输入为zoom值
+const parseRatioToZoom = (input) => {
+  // 移除所有空格
+  const cleanInput = input.replace(/\s/g, "");
+
+  // 检查是否是比例格式 (如: 1:100)
+  if (cleanInput.includes(":")) {
+    const parts = cleanInput.split(":");
+    if (parts.length === 2) {
+      const numerator = parseFloat(parts[0]);
+      const denominator = parseFloat(parts[1]);
+
+      if (!isNaN(numerator) && !isNaN(denominator) && denominator !== 0) {
+        return numerator / denominator;
+      }
+    }
+  }
+
+  // 检查是否是数字 (如: 0.5 表示缩放50%)
+  const numericValue = parseFloat(cleanInput);
+  if (!isNaN(numericValue)) {
+    return numericValue;
+  }
+
+  // 无效输入
+  return null;
+};
+
+// 监听当前缩放变化，更新输入框显示
 watch(
   () => props.currentZoom,
   (newVal) => {
-    zoomInput.value = newVal;
-  }
+    zoomInput.value = zoomToRatioString(newVal);
+  },
+  { immediate: true }
 );
 
 const handleAddTab = () => {
@@ -118,7 +221,23 @@ const handleZoomOut = () => {
 };
 
 const handleZoomChange = () => {
-  emit("set-zoom", zoomInput.value);
+  const zoomValue = parseRatioToZoom(zoomInput.value);
+
+  if (zoomValue !== null) {
+    // 限制缩放范围
+    const clampedZoom = Math.max(0.1, Math.min(5, zoomValue));
+    emit("set-zoom", clampedZoom);
+  } else {
+    // 输入无效，恢复显示
+    ElMessage.warning("请输入有效的比例格式，如: 1:1 或 0.5");
+    // 恢复之前的显示
+    zoomInput.value = zoomToRatioString(props.currentZoom);
+  }
+};
+
+// 失去焦点时也应用更改
+const handleZoomBlur = () => {
+  handleZoomChange();
 };
 
 const handleResetView = () => {
@@ -126,28 +245,27 @@ const handleResetView = () => {
 };
 
 const handleToggleSwipe = () => {
+  if (!canEnableSwipe.value && !props.swipeMode) {
+    ElMessage.warning("启用卷帘需要至少两个可见图层");
+    return;
+  }
   emit("toggle-swipe");
 };
 
 const handleImageUpload = (uploadFile) => {
   const file = uploadFile.raw;
-  const reader = new FileReader();
-
-  reader.onload = (e) => {
-    const img = new Image();
-    img.src = e.target.result;
-
-    img.onload = () => {
+  fileUpload(file).then((res) => {
+    if (res.data.message == "图像上传成功") {
+      ElMessage.success("图像上传成功");
       emit("upload-image", {
-        name: file.name,
-        src: e.target.result,
-        width: img.width,
-        height: img.height,
+        imageId: res.data.image_id,
+        name: res.data.image_info.filename,
+        src: store.baseUrl + res.data.image_info.image_url, // 使用服务器返回的URL
+        width: res.data.image_info.image_width, // 服务器返回的宽高
+        height: res.data.image_info.image_height,
       });
-    };
-  };
-
-  reader.readAsDataURL(file);
+    }
+  });
 };
 </script>
 
@@ -156,46 +274,56 @@ const handleImageUpload = (uploadFile) => {
   padding: 10px;
   background-color: #fff;
   border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .tab-section {
-  margin-bottom: 10px;
-
   .tabs-container {
     display: flex;
     align-items: center;
     gap: 5px;
+    flex-wrap: wrap;
   }
 
   .tab-item {
     display: flex;
     align-items: center;
-    padding: 5px 12px;
+    padding: 6px 12px;
     border: 1px solid #e5e7eb;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     background-color: #f9fafb;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
+    min-width: 120px;
 
     &:hover {
       background-color: #f3f4f6;
+      border-color: #d1d5db;
     }
 
     &.active {
       background-color: #1890ff;
       color: white;
       border-color: #1890ff;
+      box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
     }
 
     .tab-name {
       margin-right: 8px;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .tab-close {
       font-size: 16px;
       line-height: 1;
       padding: 2px;
-      border-radius: 2px;
+      border-radius: 3px;
+      transition: background-color 0.2s;
 
       &:hover {
         background-color: rgba(255, 255, 255, 0.2);
@@ -207,16 +335,18 @@ const handleImageUpload = (uploadFile) => {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border: 1px dashed #e5e7eb;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     color: #666;
+    transition: all 0.2s ease;
 
     &:hover {
       border-color: #1890ff;
       color: #1890ff;
+      background-color: #f0f7ff;
     }
   }
 }
@@ -224,6 +354,18 @@ const handleImageUpload = (uploadFile) => {
 .tools-section {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// 响应式设计
+@media (max-width: 768px) {
+  .tools-section {
+    gap: 6px;
+
+    .el-button {
+      padding: 6px 8px;
+    }
+  }
 }
 </style>

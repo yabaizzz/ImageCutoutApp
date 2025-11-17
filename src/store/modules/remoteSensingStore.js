@@ -6,8 +6,8 @@ export const useLayerStore = defineStore("remoteSensing", {
     tabs: [],
     activeTabId: null,
     activeLayerId: null,
-    swipeMode: true, // 默认启用卷帘对比
-    swipePosition: 0, // 初始为0，在组件中动态计算
+    swipeMode: false,
+    swipePosition: 50,
   }),
 
   getters: {
@@ -26,6 +26,16 @@ export const useLayerStore = defineStore("remoteSensing", {
   },
 
   actions: {
+    // 更新指定 tab 和 layer 的 src
+    updateLayerSrc(tabId, layerId, newSrc) {
+      const tab = this.tabs.find((t) => t.id === tabId);
+      if (tab) {
+        const layer = tab.layers.find((l) => l.id === layerId);
+        if (layer) {
+          layer.src = newSrc;
+        }
+      }
+    },
     // 标签管理
     addNewTab() {
       const newTab = {
@@ -74,6 +84,7 @@ export const useLayerStore = defineStore("remoteSensing", {
         src: imageData.src,
         width: imageData.width,
         height: imageData.height,
+        imageId: imageData.imageId,
         visible: true,
         processed: false,
         originalData: null,
@@ -160,21 +171,17 @@ export const useLayerStore = defineStore("remoteSensing", {
 
     setZoom(zoomValue) {
       if (!this.currentTab) return;
-      const zoom = Math.max(0.1, Math.min(5, zoomValue / 100));
+      // 直接使用传入的zoom值，已经在Toolbar中解析过了
+      const zoom = Math.max(0.1, Math.min(5, zoomValue));
       this.currentTab.zoom = zoom;
-      return Math.round(zoom * 100);
+      return zoom;
     },
 
     resetView() {
       if (!this.currentTab) return;
       this.currentTab.zoom = 1;
       this.currentTab.pan = { x: 0, y: 0 };
-    },
-
-    updatePan(deltaX, deltaY) {
-      if (!this.currentTab) return;
-      this.currentTab.pan.x += deltaX;
-      this.currentTab.pan.y += deltaY;
+      this.swipePosition = 50;
     },
 
     // 卷帘功能
@@ -182,7 +189,7 @@ export const useLayerStore = defineStore("remoteSensing", {
       this.swipeMode = !this.swipeMode;
       if (this.swipeMode) {
         // 启用卷帘时重置卷帘位置
-        this.swipePosition = 0;
+        this.swipePosition = 50;
       }
       return this.swipeMode;
     },

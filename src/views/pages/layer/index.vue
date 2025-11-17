@@ -37,6 +37,9 @@
         @set-swipe-position="handleSetSwipePosition"
         @apply-preprocessing="handleApplyPreprocessing"
         @undo-preprocessing="handleUndoPreprocessing"
+        @toggle-swipe="handleToggleSwipe"
+        @zoom-in="handleZoomIn"
+        @zoom-out="handleZoomOut"
       />
 
       <InfoPanel
@@ -45,18 +48,33 @@
         @undo-preprocessing="handleUndoPreprocessing"
       />
     </div>
+
+    <algorithmParamDialog
+      v-model="dialogVisible"
+      :imageId="imageId"
+      :algorithms="algorithms"
+      :defaultParams="defaultParams"
+      @confirm="handleAlgorithmConfirm"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted } from "vue";
-import { useLayerStore } from "@/store";
+import { computed, onMounted, ref } from "vue";
+import { useLayerStore, useCommonStore } from "@/store";
 import Toolbar from "./components/Toolbar.vue";
 import LayerPanel from "./components/LayerPanel.vue";
 import ImageViewer from "./components/ImageViewer.vue";
 import InfoPanel from "./components/InfoPanel.vue";
+import algorithmParamDialog from "./components/algorithmParamDialog.vue";
 
 const store = useLayerStore();
+const store2 = useCommonStore();
+
+const dialogVisible = ref(false);
+const defaultParams = ref({ ...store2?.defaultParams });
+const algorithms = ref([...store2?.algorithms]);
+const imageId = ref(null);
 
 // 状态映射
 const tabs = computed(() => store.tabs);
@@ -66,9 +84,7 @@ const currentLayer = computed(() => store.currentLayer);
 const activeLayerId = computed(() => store.activeLayerId);
 const swipeMode = computed(() => store.swipeMode);
 const swipePosition = computed(() => store.swipePosition);
-const currentZoom = computed(() =>
-  currentTab.value ? Math.round(currentTab.value.zoom * 100) : 100
-);
+const currentZoom = computed(() => store.currentTab?.zoom || 1);
 
 // 事件处理
 const handleAddTab = () => {
@@ -119,8 +135,9 @@ const handleSetVisibility = (layerId, visible) => {
   store.setLayerVisibility(layerId, visible);
 };
 
-const handleUpdatePan = (deltaX, deltaY) => {
-  store.updatePan(deltaX, deltaY);
+// 移除拖动相关的处理
+const handleUpdatePan = () => {
+  // 不再支持拖动
 };
 
 const handleSetSwipePosition = (position) => {
@@ -136,7 +153,14 @@ const handleUndoPreprocessing = (layerId) => {
 };
 
 const handleOpenLayerSettings = (layerId) => {
-  console.log("打开图层设置:", layerId);
+  // console.log("打开图层设置:", layerId);
+  console.log("layerIdlayerIdlayerId", typeof layerId);
+  dialogVisible.value = true;
+  imageId.value = layerId;
+};
+
+const handleAlgorithmConfirm = (params) => {
+  console.log("确认算法参数:", params);
 };
 
 const handleUploadImage = (imageData) => {
@@ -147,11 +171,23 @@ const handleUpdateLayers = (newLayersOrder) => {
   store.updateLayerOrder(newLayersOrder);
 };
 
-// 初始化 - 创建第一个标签
+// 页面重置功能
+const resetPage = () => {
+  // 清空所有标签
+  store.tabs = [];
+  // 重置状态
+  store.activeTabId = null;
+  store.activeLayerId = null;
+  store.swipeMode = false;
+  store.swipePosition = 0;
+  // 创建新的空白标签
+  store.addNewTab();
+};
+
+// 初始化 - 重置页面
 onMounted(() => {
-  if (tabs.value.length === 0) {
-    store.addNewTab();
-  }
+  resetPage();
+  // dialogVisible.value = true;
 });
 </script>
 

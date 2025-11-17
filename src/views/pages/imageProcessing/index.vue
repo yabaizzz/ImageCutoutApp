@@ -179,7 +179,7 @@ function saveParams(params) {
 function applyAlgorithms(params) {
   console.log("params", {
     process_type: currentParams.value.process_type,
-    parameters: { ...params },
+    parameters: { ...params.formData },
   });
   const image_id = originalImage.value.image_id;
   getProcess(image_id, {
