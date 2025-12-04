@@ -35,7 +35,6 @@
         <el-icon><ZoomOut /></el-icon> 缩小
       </el-button>
 
-      <!-- 修改为支持自定义比例输入 -->
       <el-input
         v-model="zoomInput"
         size="small"
@@ -61,6 +60,28 @@
       >
         {{ swipeMode ? "退出卷帘" : "启用卷帘" }}
       </el-button>
+
+      <!-- 拖动按钮 -->
+      <el-button
+        size="small"
+        :type="dragMode ? 'primary' : ''"
+        @click="handleToggleDrag"
+        :disabled="!canUseDrag"
+      >
+        <el-icon><Position /></el-icon>
+        {{ dragMode ? "退出拖动" : "拖动图像" }}
+      </el-button>
+
+      <!-- 区域选择按钮 -->
+      <el-button
+        size="small"
+        :type="rectSelectMode ? 'primary' : ''"
+        @click="handleToggleRectSelect"
+        :disabled="!canUseRectSelect || dragMode"
+      >
+        <el-icon><Select /></el-icon>
+        {{ rectSelectMode ? "退出选择" : "区域选择" }}
+      </el-button>
     </div>
   </div>
 </template>
@@ -68,22 +89,28 @@
 <script setup>
 import { ref, watch, computed } from "vue";
 import { fileUpload } from "@/api/api";
-import { useCommonStore } from "@/store";
+import { useCommonStore, useLayerStore } from "@/store";
 import {
   Upload,
   ZoomIn,
   ZoomOut,
   Refresh,
   Plus,
+  Select,
+  Position,
 } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
+
 const store = useCommonStore();
+const layerStore = useLayerStore();
 
 const props = defineProps({
   tabs: { type: Array, default: () => [] },
   activeTabId: { type: String, default: "" },
   swipeMode: { type: Boolean, default: false },
   currentZoom: { type: Number, default: 1 },
+  rectSelectMode: { type: Boolean, default: false },
+  dragMode: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -95,6 +122,8 @@ const emit = defineEmits([
   "set-zoom",
   "reset-view",
   "toggle-swipe",
+  "toggle-rect-select",
+  "toggle-drag",
   "upload-image",
 ]);
 
@@ -107,6 +136,20 @@ const canEnableSwipe = computed(() => {
       .find((tab) => tab.id === props.activeTabId)
       ?.layers?.filter((layer) => layer.visible) || [];
   return visibleLayers.length >= 2;
+});
+
+// 计算是否可以使用矩形选择
+const canUseRectSelect = computed(() => {
+  const currentTab = props.tabs.find((tab) => tab.id === props.activeTabId);
+  const visibleLayers =
+    currentTab?.layers?.filter((layer) => layer.visible) || [];
+  return visibleLayers.length >= 2;
+});
+
+// 计算是否可以使用拖动
+const canUseDrag = computed(() => {
+  const currentTab = props.tabs.find((tab) => tab.id === props.activeTabId);
+  return currentTab && currentTab.layers && currentTab.layers.length > 0;
 });
 
 // 将zoom值转换为比例字符串
@@ -226,6 +269,7 @@ const handleZoomChange = () => {
   if (zoomValue !== null) {
     // 限制缩放范围
     const clampedZoom = Math.max(0.1, Math.min(5, zoomValue));
+    console.log("clampedZoom", zoomValue, clampedZoom);
     emit("set-zoom", clampedZoom);
   } else {
     // 输入无效，恢复显示
@@ -252,16 +296,38 @@ const handleToggleSwipe = () => {
   emit("toggle-swipe");
 };
 
+// 处理矩形选择模式切换
+const handleToggleRectSelect = () => {
+  if (!canUseRectSelect.value && !props.rectSelectMode) {
+    ElMessage.warning("区域选择需要至少两个可见图层");
+    return;
+  }
+  emit("toggle-rect-select");
+};
+
+// 处理拖动模式切换
+const handleToggleDrag = () => {
+  if (!canUseDrag.value && !props.dragMode) {
+    ElMessage.warning("请先加载图像");
+    return;
+  }
+  emit("toggle-drag");
+};
+
 const handleImageUpload = (uploadFile) => {
   const file = uploadFile.raw;
   fileUpload(file).then((res) => {
     if (res.data.message == "图像上传成功") {
       ElMessage.success("图像上传成功");
+
+      // 确保图像URL支持跨域访问
+      let imageUrl = store.baseUrl + res.data.image_info.image_url;
+
       emit("upload-image", {
         imageId: res.data.image_id,
         name: res.data.image_info.filename,
-        src: store.baseUrl + res.data.image_info.image_url, // 使用服务器返回的URL
-        width: res.data.image_info.image_width, // 服务器返回的宽高
+        src: imageUrl,
+        width: res.data.image_info.image_width,
         height: res.data.image_info.image_height,
       });
     }

@@ -135,11 +135,11 @@ const props = defineProps({
 });
 
 // 组件事件
-const emit = defineEmits([
-  "cutoutChange", // 切块数据变化时触发
-  "exportData", // 导出数据时触发
-  "saveImage", // 保存含切块图像时触发
-]);
+  const emit = defineEmits([
+    "cutoutChange", // 切块数据变化时触发
+    "exportData", // 导出数据时触发
+    "saveImage", // 保存含切块图像时触发
+  ]);
 
 // ====== 核心状态 ======
 // 图像对象

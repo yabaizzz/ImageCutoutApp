@@ -8,6 +8,15 @@ export const useLayerStore = defineStore("remoteSensing", {
     activeLayerId: null,
     swipeMode: false,
     swipePosition: 50,
+    // 更新为矩形选择相关状态
+    rectSelectMode: false,
+    selectedRect: null,
+    statisticsData: null,
+    // 新增：记录当前卷帘分割线位置对应的图层
+    swipeLayers: [], // [左侧图层, 右侧图层]
+    // 新增拖动相关状态
+    dragMode: false,
+    isDragging: false,
   }),
 
   getters: {
@@ -23,11 +32,16 @@ export const useLayerStore = defineStore("remoteSensing", {
         ) || null
       );
     },
+
+    currentStatistics(state) {
+      return state.statisticsData;
+    },
   },
 
   actions: {
     // 更新指定 tab 和 layer 的 src
     updateLayerSrc(tabId, layerId, newSrc) {
+      console.log("newSrc", newSrc);
       const tab = this.tabs.find((t) => t.id === tabId);
       if (tab) {
         const layer = tab.layers.find((l) => l.id === layerId);
@@ -36,6 +50,7 @@ export const useLayerStore = defineStore("remoteSensing", {
         }
       }
     },
+
     // 标签管理
     addNewTab() {
       const newTab = {
@@ -198,6 +213,11 @@ export const useLayerStore = defineStore("remoteSensing", {
       this.swipePosition = position;
     },
 
+    // 设置卷帘图层
+    setSwipeLayers(layers) {
+      this.swipeLayers = layers;
+    },
+
     // 图层处理
     applyPreprocessing(layerId, processedData) {
       if (!this.currentTab) return;
@@ -209,12 +229,100 @@ export const useLayerStore = defineStore("remoteSensing", {
       }
     },
 
+    // 修改图层信息-状态为false(即文字为:原图)
     undoPreprocessing(layerId) {
       if (!this.currentTab) return;
 
       const layer = this.currentTab.layers.find((l) => l.id === layerId);
       if (layer) {
         layer.processed = false;
+      }
+    },
+
+    // 修改矩形选择功能，确保与拖动模式互斥
+    toggleRectSelectMode() {
+      // 如果当前已经是矩形选择模式，则关闭它
+      if (this.rectSelectMode) {
+        this.rectSelectMode = false;
+        this.selectedRect = null;
+      } else {
+        // 否则，先关闭拖动模式，再开启矩形选择模式
+        this.dragMode = false;
+        this.isDragging = false;
+        this.rectSelectMode = true;
+      }
+      return this.rectSelectMode;
+    },
+
+    setSelectedRect(rectData) {
+      this.selectedRect = rectData;
+    },
+
+    setStatisticsData(statistics) {
+      this.statisticsData = statistics;
+    },
+
+    clearSelection() {
+      this.selectedRect = null;
+      this.statisticsData = null;
+    },
+    // 拖动功能
+    toggleDragMode() {
+      // 如果当前已经是拖动模式，则关闭它
+      if (this.dragMode) {
+        this.dragMode = false;
+        this.isDragging = false;
+      } else {
+        // 否则，先关闭矩形选择模式，再开启拖动模式
+        this.rectSelectMode = false;
+        this.selectedRect = null;
+        this.dragMode = true;
+      }
+      return this.dragMode;
+    },
+
+    setRectSelectMode(enabled) {
+      if (enabled) {
+        // 开启矩形选择模式时，关闭拖动模式
+        this.dragMode = false;
+        this.isDragging = false;
+        this.rectSelectMode = true;
+      } else {
+        this.rectSelectMode = false;
+        this.selectedRect = null;
+      }
+    },
+
+    // 设置拖动模式（用于外部控制）
+    setDragMode(enabled) {
+      if (enabled) {
+        // 开启拖动模式时，关闭矩形选择模式
+        this.rectSelectMode = false;
+        this.selectedRect = null;
+        this.dragMode = true;
+      } else {
+        this.dragMode = false;
+        this.isDragging = false;
+      }
+    },
+
+    setDragState(dragging) {
+      this.isDragging = dragging;
+    },
+
+    // 更新平移位置
+    updatePan(tabId, panX, panY) {
+      const tab = this.tabs.find((t) => t.id === tabId);
+      if (tab) {
+        tab.pan = { x: panX, y: panY };
+      }
+    },
+
+    // 重置平移位置
+    resetPan(tabId) {
+      const tab = this.tabs.find((t) => t.id === tabId);
+      if (tab) {
+        tab.pan = { x: 0, y: 0 };
       }
     },
   },

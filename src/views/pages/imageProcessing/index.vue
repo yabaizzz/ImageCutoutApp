@@ -177,16 +177,10 @@ function saveParams(params) {
 }
 // 算法请求-处理图片
 function applyAlgorithms(params) {
-  console.log("params", {
-    process_type: currentParams.value.process_type,
-    parameters: { ...params.formData },
-  });
   const image_id = originalImage.value.image_id;
   getProcess(image_id, {
     process_type: currentParams.value.process_type,
-    parameters: JSON.stringify({
-      ...params.formData,
-    }),
+    ...params.formData,
   }).then((res) => {
     if (res.data.message == "图像处理成功") {
       ElMessage.success("图像处理成功");

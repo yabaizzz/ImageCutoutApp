@@ -1,7 +1,8 @@
+
 <template>
   <div class="image-processing-container">
     <!-- 页面标题 -->
-    <h2 class="page-title">特殊图像处理工具</h2>
+    <h2 class="page-title">数据集可视化</h2>
 
     <!-- 1. 文件上传区域 -->
     <div class="upload-section">
@@ -15,7 +16,7 @@
         list-type="text"
       >
         <el-button size="default" type="primary">
-          <el-icon><UploadFilled /></el-icon> 选择特殊图像文件
+          <el-icon><UploadFilled /></el-icon> 选择文件
         </el-button>
       </el-upload>
     </div>

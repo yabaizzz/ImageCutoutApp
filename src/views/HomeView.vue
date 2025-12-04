@@ -40,26 +40,32 @@
             <el-icon :size="size" :color="color">
               <Edit />
             </el-icon>
-            <span>图像标注</span>
+            <span>地物识别</span>
           </template>
           <el-menu-item index="3-1">
             <el-icon :size="size" :color="color">
               <Edit />
             </el-icon>
-            <span>普通图像标注</span>
+            <span>数据集可视化</span>
           </el-menu-item>
           <el-menu-item index="3-2">
             <el-icon :size="size" :color="color">
               <Edit />
             </el-icon>
-            <span>特殊图像标注</span>
+            <span>图像分割</span>
+          </el-menu-item>
+          <el-menu-item index="3-3">
+            <el-icon :size="size" :color="color">
+              <Edit />
+            </el-icon>
+            <span>目标检测</span>
           </el-menu-item>
         </el-sub-menu>
         <el-menu-item index="4">
           <el-icon :size="size" :color="color">
             <Edit />
           </el-icon>
-          <span>多图层叠加</span>
+          <span>主界面</span>
         </el-menu-item>
       </el-menu>
     </div>
@@ -68,8 +74,9 @@
       <imageCutouDraggablet2 v-if="knowIndex == '1'"></imageCutouDraggablet2>
       <imageProcessing v-if="knowIndex == '2-1'"></imageProcessing>
       <imageProcessList v-if="knowIndex == '2-2'"></imageProcessList>
-      <imageCaptioning v-if="knowIndex == '3-1'"></imageCaptioning>
-      <imageCaptioning2 v-if="knowIndex == '3-2'"></imageCaptioning2>
+      <imageCaptioning2 v-if="knowIndex == '3-1'"></imageCaptioning2>
+      <PolygonImage v-if="knowIndex == '3-2'"></PolygonImage>
+      <BoundingBox v-if="knowIndex == '3-3'"></BoundingBox>
       <layerOverlay v-if="knowIndex == '4'"></layerOverlay>
     </div>
   </div>
@@ -77,11 +84,16 @@
 
 <script setup>
 import { reactive, ref, onMounted, toRef } from "vue";
+// 图像切开
 import imageCutouDraggablet2 from "@/views/pages/imageCutouDraggablet/index.vue";
+// 图像处理
 import imageProcessing from "@/views/pages/imageProcessing/index.vue";
 import imageProcessList from "@/views/pages/imageProcessList/imageProcessList.vue";
-import imageCaptioning from "@/views/pages/imageCaptioning/imageCaptioning.vue";
+// 地物识别
 import imageCaptioning2 from "@/views/pages/imageCaptioning/imageCaptioning2.vue";
+import PolygonImage from "@/views/pages/baseImageCaptioning/PolygonImage.vue";
+import BoundingBox from "@/views/pages/baseImageCaptioning/BoundingBox.vue";
+// 多图层叠加
 import layerOverlay from "@/views/pages/layer/index.vue";
 import { useCommonStore } from "@/store";
 import { getDefaultParams } from "@/api/api";

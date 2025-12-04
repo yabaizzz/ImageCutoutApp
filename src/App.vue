@@ -32,6 +32,7 @@
 <script setup>
 import CustomTitleBar from "@/components/CustomTitleBar/index.vue";
 import { ref, onMounted } from "vue";
+import { ElMessage } from "element-plus";
 
 // 响应式数据
 const showUpdateDialog = ref(false);

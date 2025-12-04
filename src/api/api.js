@@ -11,8 +11,8 @@ export const fileUpload = (file) => {
 };
 
 /** 应用算法处理图像 */
-export const getProcess = (image_id, data) =>
-  request.post(`/api/process/${image_id}`, null, {
+export const getProcess = (imageid, data) =>
+  request.post(`/api/process/${imageid}`, null, {
     params: data,
   });
 
@@ -47,7 +47,7 @@ export const editTaskImageTitle = (data) =>
 export const deleteTaskImage = (task_id) =>
   request.delete(`/api/task/${task_id}/delete`);
 
-// 普通图像标记
+// 普通图像标记（第一种格式）
 export const fileUpload1 = (image, txt) => {
   const formData = new FormData();
   formData.append("image", image);
@@ -58,12 +58,23 @@ export const fileUpload1 = (image, txt) => {
   });
 };
 
+// 普通图像标记（第二种格式）
+export const fileUpload3 = (image, txt) => {
+  const formData = new FormData();
+  formData.append("image", image);
+  formData.append("annotation", txt);
+
+  return request.post("/api/annotation/box", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
 // 特殊图像标记
 export const fileUpload2 = (file) => {
   const formData = new FormData();
   formData.append("image", file);
 
-  return request.post("/api/annotation2", formData, {
+  return request.post("/api/annotation/region", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 };

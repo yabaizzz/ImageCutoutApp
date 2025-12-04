@@ -1,10 +1,8 @@
-<!-- 原格式一/格式二。现已弃用-->
-
 <template>
   <div class="app-container">
     <!-- 文件上传区域 -->
     <div class="upload-section">
-      <h2>图像标注可视化工具</h2>
+      <h2>目标检测</h2>
       <div class="upload-controls">
         <div class="file-upload-group">
           <label for="imageUpload">选择PNG图像:</label>
@@ -33,6 +31,14 @@
         >
           处理文件
         </button>
+        <!-- 导出统计按钮 -->
+        <button
+          @click="exportStatistics"
+          class="btn btn-export"
+          :disabled="!hasData"
+        >
+          导出统计
+        </button>
       </div>
     </div>
 
@@ -51,6 +57,12 @@
             ref="scanCanvas"
             class="scan-canvas"
             v-show="showScanEffect"
+          ></canvas>
+          <!-- 区域选择画布 -->
+          <canvas
+            ref="selectionCanvas"
+            class="selection-canvas"
+            v-show="selectionMode"
           ></canvas>
 
           <!-- 水平扫描线 - 延伸到容器外 -->
@@ -124,6 +136,24 @@
             />
             <span>{{ scanPosition }}%</span>
           </div>
+
+          <!-- 区域选择开关 -->
+          <div class="control-group">
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                v-model="selectionMode"
+                @change="handleSelectionModeToggle"
+              />
+              区域选择模式
+            </label>
+          </div>
+
+          <!-- 区域统计信息 -->
+          <div class="control-group" v-if="selectionStats">
+            <label>选中区域统计:</label>
+            <span>{{ selectionStats.count }} 个目标</span>
+          </div>
         </div>
       </div>
 
@@ -173,10 +203,10 @@
                 </div>
                 <div class="stat-values">
                   <span>数量: {{ stat.count }}</span>
-                  <span>面积: {{ formatNumber(stat.area) }}px</span>
-                  <span v-if="stat.perimeter"
+                  <!-- <span>面积: {{ formatNumber(stat.area) }}px</span> -->
+                  <!-- <span v-if="stat.perimeter"
                     >周长: {{ formatNumber(stat.perimeter) }}px</span
-                  >
+                  > -->
                 </div>
               </div>
             </div>
@@ -200,6 +230,34 @@
                 :style="{ backgroundColor: category.color }"
               ></div>
               <span class="legend-label">{{ category.name }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 区域统计详情 -->
+        <div
+          class="panel-section"
+          v-if="selectionStats && selectionStats.details.length > 0"
+        >
+          <h3>区域统计详情</h3>
+          <div class="stats-container">
+            <div
+              v-for="detail in selectionStats.details"
+              :key="detail.classId"
+              class="stat-item"
+            >
+              <div
+                class="color-indicator"
+                :style="getColorStyle(detail.classId)"
+              ></div>
+              <div class="stat-details">
+                <div class="category-name">
+                  {{ getCategoryName(detail.classId) }}
+                </div>
+                <div class="stat-values">
+                  <span>数量: {{ detail.count }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -228,16 +286,16 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
-import { fileUpload1 } from "@/api/api";
+import { fileUpload3 } from "@/api/api";
 
 const colorMap = {
-  0: { name: "城市土地", color: "rgba(0, 255, 255, 0.5)" },
-  1: { name: "农业用地", color: "rgba(255, 255, 0, 0.5)" },
-  2: { name: "牧场", color: "rgba(255, 0, 255, 0.5)" },
-  3: { name: "森林", color: "rgba(0, 255, 0, 0.5)" },
-  4: { name: "水系", color: "rgba(0, 0, 255, 0.5)" },
-  5: { name: "荒地", color: "rgba(255, 255, 255, 0.5)" },
-  6: { name: "未知土地", color: "rgba(0, 0, 0, 0.5)" },
+  0: { name: "ship", color: "rgba(0, 255, 255, 0.5)" },
+  // 1: { name: "农业用地", color: "rgba(255, 255, 0, 0.5)" },
+  // 2: { name: "牧场", color: "rgba(255, 0, 255, 0.5)" },
+  // 3: { name: "森林", color: "rgba(0, 255, 0, 0.5)" },
+  // 4: { name: "水系", color: "rgba(0, 0, 255, 0.5)" },
+  // 5: { name: "荒地", color: "rgba(255, 255, 255, 0.5)" },
+  // 6: { name: "未知土地", color: "rgba(0, 0, 0, 0.5)" },
 };
 
 // 响应式数据
@@ -257,13 +315,22 @@ const originalMaskData = ref([]);
 const showScanEffect = ref(false);
 const scanDirection = ref("horizontal");
 const isDragging = ref(false);
+const selectionMode = ref(false);
+const selectionStats = ref(null);
 
 // Canvas 引用
 const originalCanvas = ref(null);
 const maskCanvas = ref(null);
 const scanCanvas = ref(null);
+const selectionCanvas = ref(null);
 const canvasContainer = ref(null);
 const canvasInitialized = ref(false);
+
+// 区域选择相关变量
+const isSelecting = ref(false);
+const selectionStart = ref({ x: 0, y: 0 });
+const selectionEnd = ref({ x: 0, y: 0 });
+const currentSelection = ref(null);
 
 // 计算属性
 const hasFiles = computed(() => imageFile.value && textFile.value);
@@ -278,15 +345,25 @@ const verticalScanLineStyle = computed(() => ({
 }));
 
 // 初始化Canvas
-watch([originalCanvas, maskCanvas, scanCanvas], () => {
-  if (originalCanvas.value && maskCanvas.value && scanCanvas.value) {
+watch([originalCanvas, maskCanvas, scanCanvas, selectionCanvas], () => {
+  if (
+    originalCanvas.value &&
+    maskCanvas.value &&
+    scanCanvas.value &&
+    selectionCanvas.value
+  ) {
     initializeCanvasContexts();
   }
 });
 
 onMounted(() => {
   setTimeout(() => {
-    if (originalCanvas.value && maskCanvas.value && scanCanvas.value) {
+    if (
+      originalCanvas.value &&
+      maskCanvas.value &&
+      scanCanvas.value &&
+      selectionCanvas.value
+    ) {
       initializeCanvasContexts();
     }
   }, 300);
@@ -301,10 +378,30 @@ const initializeCanvasContexts = () => {
     originalCanvas.value.getContext("2d");
     maskCanvas.value.getContext("2d");
     scanCanvas.value.getContext("2d");
+    selectionCanvas.value.getContext("2d");
     canvasInitialized.value = true;
+
+    // 添加区域选择事件监听
+    setupSelectionEvents();
   } catch (error) {
     errorMessage.value = "Canvas初始化失败: " + error.message;
   }
+};
+
+// 设置区域选择事件
+const setupSelectionEvents = () => {
+  if (!selectionCanvas.value) return;
+
+  const canvas = selectionCanvas.value;
+
+  canvas.addEventListener("mousedown", startSelection);
+  canvas.addEventListener("mousemove", updateSelection);
+  canvas.addEventListener("mouseup", endSelection);
+  canvas.addEventListener("mouseleave", () => {
+    if (isSelecting.value) {
+      endSelection();
+    }
+  });
 };
 
 const getSafeCanvasContext = (canvasElement, contextName = "canvas") => {
@@ -338,19 +435,158 @@ const handleTextUpload = (event) => {
   errorMessage.value = "";
 };
 
+// 区域选择模式切换
+const handleSelectionModeToggle = () => {
+  if (!selectionMode.value) {
+    // 退出区域选择模式
+    clearSelection();
+    selectionStats.value = null;
+  } else {
+    // 进入区域选择模式
+    showScanEffect.value = false;
+    clearScanMask();
+  }
+  renderMask();
+};
+
+// 开始区域选择
+const startSelection = (event) => {
+  if (!selectionMode.value) return;
+
+  const rect = selectionCanvas.value.getBoundingClientRect();
+  const scaleX = canvasWidth.value / rect.width;
+  const scaleY = canvasHeight.value / rect.height;
+
+  isSelecting.value = true;
+  selectionStart.value = {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY,
+  };
+  selectionEnd.value = { ...selectionStart.value };
+};
+
+// 更新区域选择
+const updateSelection = (event) => {
+  if (!selectionMode.value || !isSelecting.value) return;
+
+  const rect = selectionCanvas.value.getBoundingClientRect();
+  const scaleX = canvasWidth.value / rect.width;
+  const scaleY = canvasHeight.value / rect.height;
+
+  selectionEnd.value = {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY,
+  };
+
+  drawSelection();
+};
+
+// 结束区域选择
+const endSelection = () => {
+  if (!selectionMode.value || !isSelecting.value) return;
+
+  isSelecting.value = false;
+
+  // 计算选择区域
+  const x = Math.min(selectionStart.value.x, selectionEnd.value.x);
+  const y = Math.min(selectionStart.value.y, selectionEnd.value.y);
+  const width = Math.abs(selectionEnd.value.x - selectionStart.value.x);
+  const height = Math.abs(selectionEnd.value.y - selectionStart.value.y);
+
+  if (width > 5 && height > 5) {
+    // 最小选择区域
+    currentSelection.value = { x, y, width, height };
+    calculateSelectionStatistics();
+  } else {
+    clearSelection();
+  }
+};
+
+// 绘制选择区域
+const drawSelection = () => {
+  const ctx = getSafeCanvasContext(selectionCanvas.value, "Selection");
+  ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
+
+  if (isSelecting.value) {
+    const x = Math.min(selectionStart.value.x, selectionEnd.value.x);
+    const y = Math.min(selectionStart.value.y, selectionEnd.value.y);
+    const width = Math.abs(selectionEnd.value.x - selectionStart.value.x);
+    const height = Math.abs(selectionEnd.value.y - selectionStart.value.y);
+
+    ctx.strokeStyle = "#ff0000";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(x, y, width, height);
+
+    ctx.fillStyle = "rgba(255, 0, 0, 0.1)";
+    ctx.fillRect(x, y, width, height);
+    ctx.setLineDash([]);
+  }
+};
+
+// 清除选择区域
+const clearSelection = () => {
+  const ctx = getSafeCanvasContext(selectionCanvas.value, "Selection");
+  ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
+  currentSelection.value = null;
+  selectionStats.value = null;
+};
+
+// 计算选择区域统计
+const calculateSelectionStatistics = () => {
+  if (!currentSelection.value || !maskData.value.length) return;
+
+  const selection = currentSelection.value;
+  const selectedBoxes = [];
+  const classCounts = {};
+
+  maskData.value.forEach((mask) => {
+    const bbox = mask.boundingBox;
+    const boxX = bbox.x * canvasWidth.value;
+    const boxY = bbox.y * canvasHeight.value;
+    const boxWidth = bbox.width * canvasWidth.value;
+    const boxHeight = bbox.height * canvasHeight.value;
+
+    // 检查边界框是否在选择区域内（中心点在区域内）
+    const centerX = boxX + boxWidth / 2;
+    const centerY = boxY + boxHeight / 2;
+
+    if (
+      centerX >= selection.x &&
+      centerX <= selection.x + selection.width &&
+      centerY >= selection.y &&
+      centerY <= selection.y + selection.height
+    ) {
+      selectedBoxes.push(mask);
+
+      // 统计类别数量
+      const classId = mask.classId;
+      classCounts[classId] = (classCounts[classId] || 0) + 1;
+    }
+  });
+
+  // 构建统计详情
+  const details = Object.keys(classCounts).map((classId) => ({
+    classId: parseInt(classId),
+    count: classCounts[classId],
+  }));
+
+  selectionStats.value = {
+    count: selectedBoxes.length,
+    details: details,
+  };
+};
+
 // 扫描效果切换
 const handleScanEffectToggle = () => {
   if (showScanEffect.value) {
     scanPosition.value = 0;
-    // 切换到扫描模式时，重新渲染掩码以清除基础掩码
     renderMask();
   } else {
-    // 关闭扫描效果时，清除扫描画布并恢复基础掩码
     clearScanMask();
     scanPosition.value = 0;
     scanDirection.value = "horizontal";
     isDragging.value = false;
-    // 重新渲染基础掩码
     renderMask();
   }
 };
@@ -410,12 +646,18 @@ const processFiles = async () => {
   errorMessage.value = "";
 
   try {
-    const res = await fileUpload1(imageFile.value, textFile.value);
+    const res = await fileUpload3(imageFile.value, textFile.value);
 
-    // 赋值数据
-    maskData.value = res.data.maskData;
-    originalMaskData.value = [...res.data.maskData];
-    statistics.value = res.data.statistics;
+    // 过滤只保留边界框类型
+    const boundingBoxData = res.data.maskData.filter(
+      (mask) => mask.type === "boundingBox"
+    );
+
+    maskData.value = boundingBoxData;
+    originalMaskData.value = [...boundingBoxData];
+    statistics.value = res.data.statistics.filter((stat) =>
+      boundingBoxData.some((mask) => mask.classId === stat.classId)
+    );
     imageInfo.value.width = res.data.imageInfo.width;
     imageInfo.value.height = res.data.imageInfo.height;
     imageInfo.value.name = res.data.imageInfo.name;
@@ -458,7 +700,12 @@ const loadImage = () => {
 
 // Canvas设置
 const setupCanvases = () => {
-  const canvases = [originalCanvas.value, maskCanvas.value, scanCanvas.value];
+  const canvases = [
+    originalCanvas.value,
+    maskCanvas.value,
+    scanCanvas.value,
+    selectionCanvas.value,
+  ];
   canvases.forEach((canvas) => {
     if (canvas) {
       canvas.width = canvasWidth.value;
@@ -477,6 +724,7 @@ const setupCanvases = () => {
   if (originalCanvas.value) originalCanvas.value.style.zIndex = "1";
   if (maskCanvas.value) maskCanvas.value.style.zIndex = "2";
   if (scanCanvas.value) scanCanvas.value.style.zIndex = "3";
+  if (selectionCanvas.value) selectionCanvas.value.style.zIndex = "4";
 };
 
 // 渲染掩码
@@ -489,31 +737,14 @@ const renderMask = () => {
       // 正常模式：在 maskCanvas 上绘制完整掩码
       maskData.value.forEach((mask) => {
         const color = getCategoryColor(mask.classId);
-        if (mask.type === "polygon") {
-          drawPolygonMask(ctx, mask.points, color);
-          drawBoundingBox(
-            ctx,
-            mask.boundingBox,
-            color,
-            mask.classId,
-            mask.type
-          );
-        } else if (mask.type === "boundingBox") {
-          drawBoundingBoxMask(ctx, mask.boundingBox, color);
-          drawBoundingBox(
-            ctx,
-            mask.boundingBox,
-            color,
-            mask.classId,
-            mask.type
-          );
-        }
+        drawBoundingBoxMask(ctx, mask.boundingBox, color);
+        drawBoundingBox(ctx, mask.boundingBox, color, mask.classId, mask.type);
       });
       maskCanvas.value.style.opacity = maskOpacity.value;
     } else {
       // 扫描模式：完全清除基础掩码，只在 scanCanvas 上绘制扫描区域
       ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
-      maskCanvas.value.style.opacity = 0; // 确保基础掩码完全透明
+      maskCanvas.value.style.opacity = 0;
 
       // 立即更新扫描效果
       updateScanLine();
@@ -522,28 +753,6 @@ const renderMask = () => {
     console.error("渲染掩码失败:", error);
     errorMessage.value = `渲染掩码失败: ${error.message}`;
   }
-};
-
-// 绘制多边形掩码
-const drawPolygonMask = (ctx, points, color) => {
-  if (!points || points.length < 3) return;
-
-  ctx.fillStyle = color;
-  ctx.globalAlpha = maskOpacity.value;
-  ctx.beginPath();
-
-  const startX = points[0].x * canvasWidth.value;
-  const startY = points[0].y * canvasHeight.value;
-  ctx.moveTo(startX, startY);
-
-  for (let i = 1; i < points.length; i++) {
-    const x = points[i].x * canvasWidth.value;
-    const y = points[i].y * canvasHeight.value;
-    ctx.lineTo(x, y);
-  }
-
-  ctx.closePath();
-  ctx.fill();
 };
 
 // 绘制边界框掩码
@@ -559,27 +768,49 @@ const drawBoundingBoxMask = (ctx, bbox, color) => {
   ctx.fillRect(x, y, width, height);
 };
 
-// 绘制边界框
+// 绘制边界框（新增类别名称显示）
 const drawBoundingBox = (ctx, bbox, color, classId, maskType) => {
   ctx.strokeStyle = color;
   ctx.lineWidth = 3;
   ctx.globalAlpha = 1.0;
 
-  // 计算像素级边界框坐标（原有逻辑不变）
   const x = bbox.x * canvasWidth.value;
   const y = bbox.y * canvasHeight.value;
   const width = bbox.width * canvasWidth.value;
   const height = bbox.height * canvasHeight.value;
 
-  // 绘制边界框线条（两种类型都保留）
+  // 绘制边界框线条
   ctx.strokeRect(x, y, width, height);
 
-  // 仅 polygon 类型显示 ID 标签，boundingBox 类型不显示
-  if (maskType === "polygon") {
-    drawClassIdLabel(ctx, x, y, width, height, classId, color);
-  }
+  // 绘制类别名称
+  drawClassName(ctx, classId, x, y);
 
   ctx.globalAlpha = maskOpacity.value;
+};
+
+// 绘制类别名称（新增函数）
+const drawClassName = (ctx, classId, x, y) => {
+  const className = getCategoryName(classId);
+
+  // 设置文本样式
+  ctx.font = "14px Arial";
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#000000";
+  ctx.lineWidth = 2;
+  ctx.textBaseline = "top";
+
+  // 计算文本宽度
+  const textMetrics = ctx.measureText(className);
+  const textWidth = textMetrics.width;
+  const textHeight = 16;
+
+  // 绘制文本背景
+  ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+  ctx.fillRect(x, y - textHeight - 2, textWidth + 8, textHeight + 4);
+
+  // 绘制文本
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(className, x + 4, y - textHeight);
 };
 
 // 绘制扫描边界框（不显示标签）
@@ -598,38 +829,15 @@ const drawScanBoundingBox = (ctx, bbox, color) => {
   ctx.globalAlpha = maskOpacity.value;
 };
 
-// 绘制类别标签
-const drawClassIdLabel = (ctx, x, y, width, height, classId, color) => {
-  const label = classId.toString();
-  const padding = 5;
-  const minDimension = Math.min(width, height);
-  const fontSize = Math.max(12, Math.min(24, minDimension * 0.15));
-
-  ctx.font = `bold ${fontSize}px Arial`;
-  const textWidth = ctx.measureText(label).width;
-  const labelWidth = textWidth + padding * 2;
-  const labelHeight = fontSize + padding * 2;
-
-  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-  ctx.fillRect(x, y, labelWidth, labelHeight);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x, y, labelWidth, labelHeight);
-  ctx.fillStyle = "#333";
-  ctx.textBaseline = "top";
-  ctx.fillText(label, x + padding, y + padding);
-};
-
 // 更新扫描线
 const updateScanLine = () => {
   updateScanMask();
 };
 
-// 更新扫描掩码 - 重新设计支持水平和垂直扫描
+// 更新扫描掩码
 const updateScanMask = () => {
   try {
     const ctx = getSafeCanvasContext(scanCanvas.value, "Scan");
-    // 完全清除扫描画布
     ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
 
     if (showScanEffect.value) {
@@ -637,13 +845,11 @@ const updateScanMask = () => {
 
       // 根据扫描方向设置剪辑区域
       if (scanDirection.value === "horizontal") {
-        // 水平扫描：扫描线左侧区域
         const scanX = (scanPosition.value / 100) * canvasWidth.value;
         ctx.beginPath();
         ctx.rect(0, 0, scanX, canvasHeight.value);
         ctx.clip();
       } else {
-        // 垂直扫描：扫描线上方区域
         const scanY = (scanPosition.value / 100) * canvasHeight.value;
         ctx.beginPath();
         ctx.rect(0, 0, canvasWidth.value, scanY);
@@ -653,48 +859,16 @@ const updateScanMask = () => {
       // 在已扫描区域绘制掩码和边界框
       maskData.value.forEach((mask) => {
         const color = getCategoryColor(mask.classId);
-
-        if (mask.type === "polygon") {
-          drawPolygonScanMask(ctx, mask.points, color);
-          // 扫描时显示多边形边界框
-          drawScanBoundingBox(ctx, mask.boundingBox, color);
-        } else if (mask.type === "boundingBox") {
-          drawBoundingBoxScanMask(ctx, mask.boundingBox, color);
-          // 扫描时显示边界框类型的边界框
-          drawScanBoundingBox(ctx, mask.boundingBox, color);
-        }
+        drawBoundingBoxScanMask(ctx, mask.boundingBox, color);
+        drawScanBoundingBox(ctx, mask.boundingBox, color);
       });
 
       ctx.restore();
-
-      // 确保基础掩码完全隐藏
       maskCanvas.value.style.opacity = 0;
     }
   } catch (error) {
     console.error("更新扫描遮罩失败:", error);
   }
-};
-
-// 绘制多边形扫描掩码
-const drawPolygonScanMask = (ctx, points, color) => {
-  if (!points || points.length < 3) return;
-
-  ctx.fillStyle = color;
-  ctx.globalAlpha = maskOpacity.value;
-  ctx.beginPath();
-
-  const startX = points[0].x * canvasWidth.value;
-  const startY = points[0].y * canvasHeight.value;
-  ctx.moveTo(startX, startY);
-
-  for (let i = 1; i < points.length; i++) {
-    const x = points[i].x * canvasWidth.value;
-    const y = points[i].y * canvasHeight.value;
-    ctx.lineTo(x, y);
-  }
-
-  ctx.closePath();
-  ctx.fill();
 };
 
 // 绘制边界框扫描掩码
@@ -715,7 +889,6 @@ const clearScanMask = () => {
   try {
     const ctx = getSafeCanvasContext(scanCanvas.value, "Scan");
     ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
-    // 恢复基础掩码显示
     maskCanvas.value.style.opacity = maskOpacity.value;
   } catch (error) {
     console.error("清除扫描遮罩失败:", error);
@@ -751,8 +924,13 @@ const getCategoryColor = (classId) => {
   return colorMap[classId]?.color || "rgba(128, 128, 128, 0.5)";
 };
 
-// 获取类别名称
+// 获取类别名称（预留扩展功能）
 const getCategoryName = (classId) => {
+  console.log("classId", classId);
+
+  // 这里可以扩展从配置文件或API获取类别名称
+  // 目前根据classId返回对应名称，0类为ship
+  if (classId === 0) return "ship";
   return colorMap[classId]?.name || `类别 ${classId}`;
 };
 
@@ -768,13 +946,36 @@ const formatNumber = (num) => {
   return num ? num.toLocaleString() : "0";
 };
 
-// 格式化文件大小
-const formatFileSize = (bytes) => {
-  if (!bytes || bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+// 导出统计信息到文本文件（新增功能）
+const exportStatistics = () => {
+  if (!hasData.value || statistics.value.length === 0) {
+    errorMessage.value = "没有可导出的统计数据";
+    return;
+  }
+
+  try {
+    const imageName = imageInfo.value.name || "unknown";
+    let content = "";
+
+    // 按照要求的格式生成内容：图像名称 类别名 数量\n
+    statistics.value.forEach((stat) => {
+      const className = getCategoryName(stat.classId);
+      content += `${imageName} ${className} ${stat.count}\n`;
+    });
+
+    // 创建Blob并下载
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${imageName}_statistics.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    errorMessage.value = `导出统计失败: ${error.message}`;
+  }
 };
 </script>
 
@@ -849,6 +1050,21 @@ const formatFileSize = (bytes) => {
             cursor: not-allowed;
           }
         }
+
+        &-export {
+          background-color: #3498db;
+          color: white;
+          height: fit-content;
+
+          &:hover:not(:disabled) {
+            background-color: #2980b9;
+          }
+
+          &:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+          }
+        }
       }
     }
   }
@@ -875,14 +1091,15 @@ const formatFileSize = (bytes) => {
         border-radius: 4px;
         background-color: #f0f0f0;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        overflow: visible; /* 改为visible以显示延伸的扫描线 */
+        overflow: visible;
         max-width: 800px;
         max-height: 600px;
         min-height: 400px;
 
         .image-canvas,
         .mask-canvas,
-        .scan-canvas {
+        .scan-canvas,
+        .selection-canvas {
           position: absolute;
           top: 0;
           left: 0;
@@ -897,19 +1114,19 @@ const formatFileSize = (bytes) => {
           cursor: pointer;
 
           &.horizontal-scan-line {
-            top: -10px; /* 延伸到容器上方 */
+            top: -10px;
             width: 4px;
-            height: calc(100% + 20px); /* 延伸到容器上下 */
+            height: calc(100% + 20px);
             background: red;
-            cursor: ew-resize; /* 水平拖拽光标 */
+            cursor: ew-resize;
           }
 
           &.vertical-scan-line {
-            left: -10px; /* 延伸到容器左侧 */
-            width: calc(100% + 20px); /* 延伸到容器左右 */
+            left: -10px;
+            width: calc(100% + 20px);
             height: 4px;
             background: red;
-            cursor: ns-resize; /* 垂直拖拽光标 */
+            cursor: ns-resize;
           }
         }
       }

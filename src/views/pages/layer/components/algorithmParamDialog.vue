@@ -1,6 +1,6 @@
 <!-- 
   罗佳琪 2025年11月17日09:15:20
-  描述：多图层叠加-图层管理-算法选择与参数设置弹窗
+  描述：主界面-图层管理-算法选择与参数设置弹窗
 -->
 
 <template>
@@ -273,9 +273,7 @@ function applyAlgorithms(params) {
   const image_id = props.imageId;
   getProcess(image_id, {
     process_type: selectedAlgorithmValue.value,
-    parameters: JSON.stringify({
-      ...params.formData,
-    }),
+    ...params,
   }).then((res) => {
     if (res.data.message == "图像处理成功") {
       ElMessage.success("图像处理成功");
